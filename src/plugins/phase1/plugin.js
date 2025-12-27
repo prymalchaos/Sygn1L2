@@ -21,17 +21,29 @@ async function callFunction(api, name, payload) {
   if (error) throw error;
 
   const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) throw new Error("Not logged in");
+  if (!accessToken) throw new Error("No session access token (not logged in)");
 
+  // Use your publishable key (safe to expose client-side)
+  const PUBLISHABLE_KEY = "sb_publishable_T913yWlRXNOAJt_rp81R8Q_NLshMz_i";
   const url = `https://raqqtppbtbcvkkenyqye.supabase.co/functions/v1/${name}`;
+
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      apikey: PUBLISHABLE_KEY,
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload || {}),
   });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // Bubble up the server's error message if present
+    throw new Error(json?.error || `Function ${name} failed (${res.status})`);
+  }
+  return json;
+}
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json?.error || `Function ${name} failed (${res.status})`);

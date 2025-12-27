@@ -6,9 +6,9 @@ function el(html) {
   return t.content.firstElementChild;
 }
 
-async function getUserId() {
+async function getUserIdSafe() {
   const { data: { user }, error } = await supabase.auth.getUser();
-  if (error) throw error;
+  if (error) return null;
   return user?.id ?? null;
 }
 
@@ -16,8 +16,8 @@ export default {
   id: "phase0_onboarding",
 
   mount(root, api) {
-    const state = api.getState();
-    const step = state.phases.phase0_onboarding?.step || "auth";
+    const st = api.getState();
+    const step = st.phases.phase0_onboarding?.step || "auth";
 
     const wrap = el(`
       <div style="max-width:520px; margin: 0 auto; padding: 14px;">
@@ -31,10 +31,7 @@ export default {
 
     const msg = wrap.querySelector("#msg");
     const content = wrap.querySelector("#content");
-
-    function setMsg(text) {
-      msg.textContent = text || "";
-    }
+    const setMsg = (text) => { msg.textContent = text || ""; };
 
     async function showAuth() {
       content.innerHTML = "";
@@ -48,19 +45,20 @@ export default {
           </div>
 
           <div style="display:grid; gap:10px;">
-            <input id="email" placeholder="Email" inputmode="email" autocomplete="email" style="padding:10px; border-radius:10px; border:1px solid rgba(215,255,224,0.2); background:#05070a; color:#d7ffe0;">
-            <input id="password" type="password" placeholder="Password" autocomplete="current-password" style="padding:10px; border-radius:10px; border:1px solid rgba(215,255,224,0.2); background:#05070a; color:#d7ffe0;">
+            <input id="email" placeholder="Email" inputmode="email" autocomplete="email"
+              style="padding:10px; border-radius:10px; border:1px solid rgba(215,255,224,0.2); background:#05070a; color:#d7ffe0;">
+            <input id="password" type="password" placeholder="Password" autocomplete="current-password"
+              style="padding:10px; border-radius:10px; border:1px solid rgba(215,255,224,0.2); background:#05070a; color:#d7ffe0;">
             <button id="go" style="padding:10px; border-radius:10px;">Continue</button>
           </div>
 
           <div style="margin-top:10px; font-size:13px; opacity:0.85;">
-            No email confirmation is required for this project.
+            Note: email confirmation is OFF for this project.
           </div>
         </div>
       `);
 
       let mode = "login";
-
       const modeLogin = view.querySelector("#modeLogin");
       const modeSignup = view.querySelector("#modeSignup");
       const go = view.querySelector("#go");
@@ -96,13 +94,8 @@ export default {
             if (error) throw error;
           }
 
-          // After auth, route to username creation if needed.
-          const next = api.getState();
-          next.phases.phase0_onboarding.step = "username";
-          api.setState(next);
-          await api.setPhase("phase0_onboarding");
-          setMsg("");
-          showUsername();
+          // Do NOT force username here; core routing decides.
+          setMsg("Logged in. Routing…");
         } catch (e) {
           setMsg(e?.message || String(e));
         }
@@ -146,7 +139,7 @@ export default {
             return;
           }
 
-          const userId = await getUserId();
+          const userId = await getUserIdSafe();
           if (!userId) {
             setMsg("Not logged in.");
             return;
@@ -157,9 +150,8 @@ export default {
             .insert({ id: userId, username, role: "player" });
 
           if (error) {
-            // Unique violation typically shows as a constraint error.
-            if ((error.message || "").toLowerCase().includes("duplicate")
-              || (error.message || "").toLowerCase().includes("unique")) {
+            const em = (error.message || "").toLowerCase();
+            if (em.includes("duplicate") || em.includes("unique")) {
               setMsg("That username is taken. Try another.");
               return;
             }
@@ -177,8 +169,6 @@ export default {
     }
 
     root.appendChild(wrap);
-
-    // Render correct step
     if (step === "username") showUsername();
     else showAuth();
   },

@@ -76,3 +76,22 @@
 **Files touched**
 - src/plugins/phase1/plugin.js
 - src/core/pluginLoader.js
+
+
+## 2025-12-28 (Sydney) – Input responsiveness (anti-eaten taps)
+**Goal**
+- Make rapid button tapping reliable on iPhone Safari (Ping/Purge/Buy).
+
+**Changes**
+- Removed touchend preventDefault double-tap suppression script (it was cancelling synthetic clicks).
+- Added fast-tap handler using pointerdown (touch) + click fallback for instant, reliable taps on:
+  - Ping, Purge, upgrade Buy buttons, overlays.
+
+**Files touched**
+- index.html
+- src/plugins/phase1/plugin.js
+
+**How to test**
+1. Open on iPhone Safari.
+2. Rapid tap Ping/Purge/Buy repeatedly.
+3. Taps should register nearly 1:1 (no missed presses).

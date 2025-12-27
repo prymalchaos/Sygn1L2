@@ -21,12 +21,31 @@ async function callFunction(api, name, payload) {
     body: payload || {},
   });
 
-  if (error) {
-    throw new Error(error.message || `Function ${name} failed`);
-  }
-  return data;
-}
+  if (!error) return data;
 
+  // Best effort extraction of useful details
+  const status =
+    error?.context?.status ||
+    error?.status ||
+    "unknown";
+
+  let details = "";
+  try {
+    // Supabase sometimes puts response text/json here:
+    const ctx = error?.context;
+    if (ctx?.body) {
+      if (typeof ctx.body === "string") details = ctx.body;
+      else details = JSON.stringify(ctx.body);
+    } else if (ctx?.response) {
+      details = await ctx.response.text();
+    }
+  } catch (_) {
+    // ignore
+  }
+
+  const msg = error?.message || `Function ${name} failed`;
+  throw new Error(`${msg} (status ${status})${details ? `: ${details}` : ""}`);
+}
 export default {
   id: "phase1",
 

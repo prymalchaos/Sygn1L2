@@ -114,7 +114,7 @@ const UPGRADE_DEFS = [
 ];
 
 function computeCorruptionRate(p1) {
-  const base = Number(p1.baseCorruptionRate || 0.18);
+  const base = Number(p1.baseCorruptionRate ?? TUNE.baseCorruptionRate);
 
   const noiseLvl = p1.upgrades?.noiseCanceller || 0;
   const noiseReduction = clamp(noiseLvl * 0.08, 0, 0.75); // up to 75%
@@ -128,14 +128,14 @@ function computeCorruptionRate(p1) {
 
 function purgeCost(p1) {
   const lvl = p1.upgrades?.purgeEfficiency || 0;
-  const reduction = clamp(lvl * 0.07, 0, 0.6);
-  return Math.floor(60 * (1 - reduction));
+  const reduction = clamp(lvl * TUNE.purgeCostReductionPerLvl, 0, 0.6);
+  return Math.floor(TUNE.purgeBaseCost * (1 - reduction));
 }
 
 function purgeAmount(p1) {
   const lvl = p1.upgrades?.purgeEfficiency || 0;
-  const mult = 1 + lvl * 0.10;
-  return 18 * mult; // percentage points
+  const mult = 1 + lvl * TUNE.purgePowerPerLvl;
+  return TUNE.purgeBaseAmount * mult; // percentage points
 }
 
 // "Alien tension" win condition:
@@ -143,11 +143,28 @@ function purgeAmount(p1) {
 // - Corruption ≤ 40%
 // - Own at least one defensive upgrade (Noise Canceller OR Purge Manifold)
 // - Maintain stability for 10 seconds
-const WIN = {
-  signal: 12000,
-  maxCorruption: 40,
-  holdMs: 10000,
+// Central tuning block (Phase-local). Keep numbers here so balancing is painless.
+const TUNE = {
+  // Win condition ("Alien tension")
+  winSignal: 12000,
+  winCorruptionMax: 40,
+  winHoldMs: 10_000,
+
+  // Corruption system
+  baseCorruptionRate: 0.18,     // per second
+  signalScaleForPressure: 100000, // signal at which extra pressure ramps
+  pressureAddPerScale: 0.06,    // extra corruption per second per scale unit (scale 0..2)
+
+  // Interaction noise
+  pingCorruptionNoise: 0.25,    // corruption added per Ping
+
+  // Purge system
+  purgeBaseCost: 60,
+  purgeCostReductionPerLvl: 0.07, // up to 60% reduction
+  purgeBaseAmount: 18,          // percentage points
+  purgePowerPerLvl: 0.10,       // +10% per lvl
 };
+
 
 function isDefensiveReady(p1) {
   const n = p1.upgrades?.noiseCanceller || 0;
@@ -157,8 +174,8 @@ function isDefensiveReady(p1) {
 
 function isWinStable(p1) {
   return (
-    (p1.signal || 0) >= WIN.signal &&
-    (p1.corruption || 0) <= WIN.maxCorruption &&
+    (p1.signal || 0) >= TUNE.winSignal &&
+    (p1.corruption || 0) <= TUNE.winCorruptionMax &&
     isDefensiveReady(p1) &&
     !p1.isDefeated
   );
@@ -181,7 +198,7 @@ export default {
     p1.pingPower ??= 5;
 
     p1.corruption ??= 0;
-    p1.baseCorruptionRate ??= 0.18;
+    p1.baseCorruptionRate ??= TUNE.baseCorruptionRate;
     p1.isDefeated ??= false;
 
     p1.completed ??= false;
@@ -371,6 +388,12 @@ export default {
               <button id="grantBig" class="p1-btn">+50,000 signal</button>
               <button id="goP2" class="p1-btn">Go Phase 2</button>
             </div>
+            
+            <div style="margin-top:10px; border-top:1px solid rgba(215,255,224,0.12); padding-top:10px;">
+              <button id="telemetryToggle" class="p1-btn" style="width:100%;">Telemetry (dev)</button>
+              <div id="telemetryBox" class="p1-mono" style="display:none; margin-top:10px; border-radius:10px; border:1px solid rgba(215,255,224,0.12); background: rgba(5,7,10,0.30); padding:10px; font-size:12px; white-space:pre-wrap;"></div>
+            </div>
+
             <div id="devMsg" style="margin-top:10px; font-size:12px; opacity:0.9;"></div>
           </div>
 
@@ -416,6 +439,10 @@ export default {
     const $scope = root.querySelector("#scope");
     const $osc = root.querySelector("#osc");
     const $hint = root.querySelector("#hint");
+
+    let telemetryToggleEl = null;
+    let telemetryBoxEl = null;
+
 
     const winOverlay = root.querySelector("#winOverlay");
     const winBody = root.querySelector("#winBody");
@@ -532,7 +559,7 @@ export default {
       p1.signal += p1.pingPower || 5;
 
       // Ping creates "noise": small corruption bump if you spam it
-      p1.corruption = clamp((p1.corruption || 0) + 0.25, 0, 100);
+      p1.corruption = clamp((p1.corruption || 0) + TUNE.pingCorruptionNoise, 0, 100);
 
       api.setState(st);
       api.saveSoon();
@@ -545,6 +572,24 @@ export default {
     if (isDev) {
       const devMsg = root.querySelector("#devMsg");
       const setDevMsg = (t) => { devMsg.textContent = t || ""; };
+
+      telemetryToggleEl = root.querySelector("#telemetryToggle");
+      telemetryBoxEl = root.querySelector("#telemetryBox");
+
+      // Restore last state (kept in save for convenience)
+      const st = api.getState();
+      const p1 = st.phases.phase1;
+      if (p1._telemetryOpen) telemetryBoxEl.style.display = "block";
+
+      telemetryToggleEl.onclick = () => {
+        const st2 = api.getState();
+        const p12 = st2.phases.phase1;
+        p12._telemetryOpen = !p12._telemetryOpen;
+        telemetryBoxEl.style.display = p12._telemetryOpen ? "block" : "none";
+        api.setState(st2);
+        render();
+      };
+
 
       root.querySelector("#wipe").onclick = async () => {
         setDevMsg("Wiping…");
@@ -648,12 +693,12 @@ export default {
 
     function winProgressText(p1) {
       const stable = isWinStable(p1);
-      const remaining = Math.max(0, WIN.holdMs - (p1.winHoldMs || 0));
+      const remaining = Math.max(0, TUNE.winHoldMs - (p1.winHoldMs || 0));
       if (p1.completed) return "Phase stabilised.";
       if (!stable) {
         const missing = [];
-        if ((p1.signal || 0) < WIN.signal) missing.push(`Signal ≥ ${nfmt(WIN.signal)}`);
-        if ((p1.corruption || 0) > WIN.maxCorruption) missing.push(`Corruption ≤ ${WIN.maxCorruption}%`);
+        if ((p1.signal || 0) < TUNE.winSignal) missing.push(`Signal ≥ ${nfmt(TUNE.winSignal)}`);
+        if ((p1.corruption || 0) > TUNE.winCorruptionMax) missing.push(`Corruption ≤ ${TUNE.winCorruptionMax}%`);
         if (!isDefensiveReady(p1)) missing.push("Install a defensive system (Noise Canceller or Purge Manifold)");
         return `Stabilisation criteria: ${missing.join(" • ")}`;
       }
@@ -707,7 +752,7 @@ export default {
       if (p1.completed && st.meta?.unlockedPhases?.phase2) {
         winBody.innerHTML = `
           <div style="opacity:0.92;">
-            Signal held at <b>${nfmt(WIN.signal)}</b> while corruption stayed under <b>${WIN.maxCorruption}%</b>.
+            Signal held at <b>${nfmt(TUNE.winSignal)}</b> while corruption stayed under <b>${TUNE.winCorruptionMax}%</b>.
           </div>
           <div style="margin-top:8px; opacity:0.85; font-size:13px;">
             CONTROL//RETURN  “You did it. The ship’s quiet. For now.”
@@ -753,9 +798,9 @@ export default {
     if (!state.completed) {
       if (isWinStable(state)) {
         state.winHoldMs = (state.winHoldMs || 0) + dtMs;
-        if (state.winHoldMs >= WIN.holdMs) {
+        if (state.winHoldMs >= TUNE.winHoldMs) {
           state.completed = true;
-          state.winHoldMs = WIN.holdMs;
+          state.winHoldMs = TUNE.winHoldMs;
 
           // Unlock Phase 2
           // (Phase-local choice, stored in core meta)

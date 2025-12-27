@@ -2,7 +2,7 @@ export function createDefaultState() {
   const now = Date.now();
   return {
     meta: {
-      schema: 1,
+      schema: 2,
       lastSeenAt: now,
       lastSaveAt: 0,
       offlineSummary: [],
@@ -16,6 +16,12 @@ export function createDefaultState() {
       phase1: {
         signal: 0,
         signalPerSecond: 1,
+        pingPower: 5,
+        upgrades: {
+          spsBoost: 0,     // +SPS per level
+          pingBoost: 0,    // +Ping Power per level
+          spsMult: 0,      // multiplicative SPS
+        },
       },
     },
   };

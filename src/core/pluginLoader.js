@@ -1,13 +1,25 @@
+// src/core/pluginLoader.js
+// Loads phase plugins as ES modules.
+// IMPORTANT: GitHub Pages + mobile browsers can cache modules aggressively.
+// The BUILD stamp forces fresh plugin loads when you bump it.
+
 const plugins = new Map();
+const BUILD = "2025-12-28a";
 
 export async function loadPlugins() {
-  const phase0 = await import("../plugins/phase0_onboarding/plugin.js");
-  const phase1 = await import("../plugins/phase1/plugin.js");
+  const pluginIds = [
+    "phase0_onboarding",
+    "phase1",
+  ];
 
-  plugins.set(phase0.default.id, phase0.default);
-  plugins.set(phase1.default.id, phase1.default);
+  for (const id of pluginIds) {
+    const mod = await import(`../plugins/${id}/plugin.js?v=${encodeURIComponent(BUILD)}`);
+    plugins.set(id, mod.default);
+  }
 }
 
 export function getPlugin(id) {
-  return plugins.get(id);
+  const p = plugins.get(id);
+  if (!p) throw new Error(`Plugin not found: ${id}`);
+  return p;
 }

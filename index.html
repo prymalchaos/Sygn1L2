@@ -26,27 +26,6 @@
 </head>
 <body>
   <div id="app"></div>
-
-  <script>
-    // iOS Safari: suppress double-tap zoom (keeps taps responsive for spammy buttons)
-    (function () {
-      let lastTouchEnd = 0;
-
-      document.addEventListener('touchend', function (e) {
-        const now = Date.now();
-        if (now - lastTouchEnd <= 300) {
-          e.preventDefault();
-        }
-        lastTouchEnd = now;
-      }, { passive: false });
-
-      // Also prevent pinch-zoom gestures on iOS (belt + suspenders)
-      document.addEventListener('gesturestart', function (e) {
-        e.preventDefault();
-      }, { passive: false });
-    })();
-  </script>
-
-  <script type="module" src="./src/core/boot.js"></script>
+<script type="module" src="./src/core/boot.js"></script>
 </body>
 </html>

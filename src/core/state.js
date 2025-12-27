@@ -2,7 +2,7 @@ export function createDefaultState() {
   const now = Date.now();
   return {
     meta: {
-      schema: 5,
+      schema: 6,
       lastSeenAt: now,
       lastSaveAt: 0,
       offlineSummary: [],
@@ -49,6 +49,16 @@ export function createDefaultState() {
           spsMult: 0,
           noiseCanceller: 0,
           purgeEfficiency: 0,
+          autopilotCore: 0,
+
+        autopilot: {
+          unlocked: false,
+          enabled: false,
+          targetCorruption: 40,
+          budgetFraction: 0.35,
+          offlineCap: 95,
+          budget: 0,
+        },
         },
       },
 

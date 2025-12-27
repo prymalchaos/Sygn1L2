@@ -16,6 +16,28 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;");
 }
 
+async function callFunction(api, name, payload) {
+  const { data: sessionData, error } = await api.supabase.auth.getSession();
+  if (error) throw error;
+
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error("Not logged in");
+
+  const url = `https://raqqtppbtbcvkkenyqye.supabase.co/functions/v1/${name}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload || {}),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json?.error || `Function ${name} failed (${res.status})`);
+  return json;
+}
+
 export default {
   id: "phase1",
 
@@ -29,7 +51,12 @@ export default {
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
             <div>
               <div style="opacity:0.85; font-size:13px;">Logged in as</div>
-              <div style="font-weight:700; letter-spacing:0.05em;">${escapeHtml(profile?.username ?? "UNKNOWN")}</div>
+              <div style="font-weight:700; letter-spacing:0.05em;">
+                ${escapeHtml(profile?.username ?? "UNKNOWN")}
+                <span style="opacity:0.7; font-weight:600; font-size:12px;">
+                  ${profile?.role ? `(${escapeHtml(profile.role)})` : ""}
+                </span>
+              </div>
             </div>
             <button id="logout" style="padding:10px; border-radius:10px;">Logout</button>
           </div>
@@ -57,12 +84,33 @@ export default {
           <div id="devPanel" style="display:${isDev ? "block" : "none"}; margin-top:16px;">
             <hr style="border:0; border-top:1px solid rgba(215,255,224,0.12); margin:14px 0;">
             <div style="font-weight:800; letter-spacing:0.06em;">DEV PANEL</div>
+
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
               <button id="wipe" style="padding:10px; border-radius:10px;">Wipe my save</button>
               <button id="grant" style="padding:10px; border-radius:10px;">+1000 signal</button>
               <button id="phase0" style="padding:10px; border-radius:10px;">Go phase 0</button>
               <button id="phase1" style="padding:10px; border-radius:10px;">Go phase 1</button>
             </div>
+
+            <div style="margin-top:12px; border-top:1px solid rgba(215,255,224,0.12); padding-top:12px;">
+              <div style="font-weight:800; letter-spacing:0.06em; opacity:0.95;">ADMIN TOOLS</div>
+              <div style="opacity:0.85; font-size:13px; margin-top:6px;">
+                Requires Edge Functions: <code>admin-users</code>, <code>admin-user-delete</code>.
+              </div>
+
+              <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                <button id="listUsers" style="padding:10px; border-radius:10px;">List users</button>
+                <button id="deleteTarget" style="padding:10px; border-radius:10px;">Delete user (user id)</button>
+              </div>
+
+              <div style="margin-top:10px; display:grid; gap:8px;">
+                <input id="targetUserId" placeholder="Target user_id (uuid)"
+                  style="padding:10px; border-radius:10px; border:1px solid rgba(215,255,224,0.2); background:#05070a; color:#d7ffe0;">
+              </div>
+
+              <div id="adminOut" style="margin-top:10px; font-size:13px; opacity:0.95; white-space:pre-wrap;"></div>
+            </div>
+
             <div id="devMsg" style="margin-top:10px; font-size:13px; opacity:0.9;"></div>
           </div>
 
@@ -104,10 +152,35 @@ export default {
       render();
     };
 
-    // Dev tools (only show for PrymalChaos/admin)
+    // Offline overlay (ACK)
+    const overlay = root.querySelector("#offlineOverlay");
+    const body = root.querySelector("#offlineBody");
+    const ack = root.querySelector("#offlineAck");
+
+    const st0 = api.getState();
+    if (st0.meta.offlineNeedsAck && (st0.meta.offlineSummary || []).length) {
+      const items = st0.meta.offlineSummary.map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+      body.innerHTML = `<ul style="margin:0; padding-left:18px;">${items}</ul>`;
+      overlay.style.display = "block";
+
+      ack.onclick = () => {
+        const st = api.getState();
+        st.meta.offlineNeedsAck = false;
+        st.meta.offlineSummary = [];
+        api.setState(st);
+        api.saveSoon();
+        overlay.style.display = "none";
+      };
+    }
+
+    // Dev/Admin tools
     if (isDev) {
       const devMsg = root.querySelector("#devMsg");
+      const adminOut = root.querySelector("#adminOut");
+      const targetUserIdEl = root.querySelector("#targetUserId");
+
       const setDevMsg = (t) => { devMsg.textContent = t || ""; };
+      const setAdminOut = (t) => { adminOut.textContent = t || ""; };
 
       root.querySelector("#wipe").onclick = async () => {
         setDevMsg("Wiping…");
@@ -132,26 +205,31 @@ export default {
       root.querySelector("#phase1").onclick = async () => {
         await api.setPhase("phase1");
       };
-    }
 
-    // Offline overlay (ACK)
-    const overlay = root.querySelector("#offlineOverlay");
-    const body = root.querySelector("#offlineBody");
-    const ack = root.querySelector("#offlineAck");
+      root.querySelector("#listUsers").onclick = async () => {
+        setAdminOut("Calling admin-users…");
+        try {
+          const res = await callFunction(api, "admin-users", {});
+          const lines = (res.users || []).map((u) => `${u.id}  ${u.email || ""}`);
+          setAdminOut(lines.join("\n") || "(no users returned)");
+        } catch (e) {
+          setAdminOut(`Error: ${e?.message || e}`);
+        }
+      };
 
-    const st0 = api.getState();
-    if (st0.meta.offlineNeedsAck && (st0.meta.offlineSummary || []).length) {
-      const items = st0.meta.offlineSummary.map((x) => `<li>${escapeHtml(x)}</li>`).join("");
-      body.innerHTML = `<ul style="margin:0; padding-left:18px;">${items}</ul>`;
-      overlay.style.display = "block";
+      root.querySelector("#deleteTarget").onclick = async () => {
+        const user_id = targetUserIdEl.value.trim();
+        if (!user_id) { setAdminOut("Enter a target user_id first."); return; }
 
-      ack.onclick = () => {
-        const st = api.getState();
-        st.meta.offlineNeedsAck = false;
-        st.meta.offlineSummary = [];
-        api.setState(st);
-        api.saveSoon();
-        overlay.style.display = "none";
+        if (!confirm(`Delete user ${user_id}? This cannot be undone.`)) return;
+
+        setAdminOut("Calling admin-user-delete…");
+        try {
+          const res = await callFunction(api, "admin-user-delete", { user_id });
+          setAdminOut(`Deleted: ${res.deleted}`);
+        } catch (e) {
+          setAdminOut(`Error: ${e?.message || e}`);
+        }
       };
     }
 
@@ -162,7 +240,6 @@ export default {
       $sps.textContent = p1.signalPerSecond.toString();
     }
 
-    // 🔧 Battery-friendly repaint loop (keeps UI in sync with core tick updates)
     render();
     const repaintTimer = setInterval(render, 250);
 
@@ -175,7 +252,6 @@ export default {
     if (this._cleanup) this._cleanup();
   },
 
-  // Core tick calls this in BATTERY MODE
   tick({ state, dtMs }) {
     const sps = state.signalPerSecond || 0;
     state.signal = (state.signal || 0) + sps * (dtMs / 1000);

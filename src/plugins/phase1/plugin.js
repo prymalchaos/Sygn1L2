@@ -93,7 +93,7 @@ export default {
       st.phases.phase1.signal += 5;
       api.setState(st);
       api.saveSoon();
-      render();
+      render(); // immediate feedback
     };
 
     boostBtn.onclick = () => {
@@ -101,7 +101,7 @@ export default {
       st.phases.phase1.signalPerSecond = +(st.phases.phase1.signalPerSecond + 0.5).toFixed(2);
       api.setState(st);
       api.saveSoon();
-      render();
+      render(); // immediate feedback
     };
 
     // Dev tools
@@ -162,7 +162,17 @@ export default {
       $sps.textContent = p1.signalPerSecond.toString();
     }
 
+    // 🔧 Battery-friendly repaint loop (keeps UI in sync with core tick updates)
     render();
+    const repaintTimer = setInterval(render, 250);
+
+    this._cleanup = () => {
+      clearInterval(repaintTimer);
+    };
+  },
+
+  unmount() {
+    if (this._cleanup) this._cleanup();
   },
 
   // Core tick calls this in BATTERY MODE

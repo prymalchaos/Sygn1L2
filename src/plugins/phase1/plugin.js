@@ -705,7 +705,26 @@ export default {
       return `Stabilising… hold for ${Math.ceil(remaining / 1000)}s`;
     }
 
-    function render() {
+    
+    function telemetryText(p1, rate, purgeC, purgeA) {
+      const c = clamp(p1.corruption || 0, 0, 100);
+      const etaFailSec = rate > 0 ? (100 - c) / rate : 999999;
+      const stable = isWinStable(p1);
+      const remainingMs = Math.max(0, TUNE.winHoldMs - (p1.winHoldMs || 0));
+      const pingNoise = TUNE.pingCorruptionNoise;
+
+      const lines = [];
+      lines.push("TELEMETRY//PHASE1");
+      lines.push(`Signal: ${nfmt(p1.signal)} | SPS: ${(p1.signalPerSecond || 0).toFixed(2)} | Ping: ${nfmt(p1.pingPower || 0)}`);
+      lines.push(`Corruption: ${Math.floor(c)}% | Rate: ${rate.toFixed(2)}/s | ETA fail: ${Math.floor(etaFailSec/60)}m ${Math.floor(etaFailSec%60)}s`);
+      lines.push(`Win: Signal≥${nfmt(TUNE.winSignal)} AND Corr≤${TUNE.winCorruptionMax}% AND defensive upgrade AND hold ${Math.ceil(TUNE.winHoldMs/1000)}s`);
+      lines.push(`Eligible: ${stable ? "YES" : "NO"} | Hold remaining: ${Math.ceil(remainingMs/1000)}s`);
+      lines.push(`Purge: cost ${nfmt(purgeC)} | amount -${Math.floor(purgeA)}% | Ping noise +${pingNoise.toFixed(2)}%`);
+      lines.push(`Upgrades: spsBoost ${p1.upgrades?.spsBoost||0} | pingBoost ${p1.upgrades?.pingBoost||0} | spsMult ${p1.upgrades?.spsMult||0} | noiseCanceller ${p1.upgrades?.noiseCanceller||0} | purgeEff ${p1.upgrades?.purgeEfficiency||0}`);
+      return lines.join("\n");
+    }
+
+function render() {
       const st = api.getState();
       const p1 = st.phases.phase1;
 
@@ -727,6 +746,12 @@ export default {
 
       $comms.textContent = (p1.comms || []).join("\n");
       $tx.textContent = (p1.transmission || []).join("\n");
+
+      // Telemetry (dev-only)
+      if (isDev && telemetryBoxEl && p1._telemetryOpen) {
+        telemetryBoxEl.textContent = telemetryText(p1, rate, purgeC, purgeA);
+      }
+
 
       // Scope toys (purely visual)
       const ph = (Date.now() / 500) % (Math.PI * 2);

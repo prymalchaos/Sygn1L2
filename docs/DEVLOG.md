@@ -46,3 +46,24 @@
 1. Open game on iPhone Safari.
 2. Rapidly tap Ping/Purge/Buy buttons.
 3. Page should not zoom in/out on double taps.
+
+
+## 2025-12-28 (Sydney) – Phase 1 telemetry + tuning block
+**Goal**
+- Make Phase 1 balancing fast and repeatable without guesswork.
+- Keep all tunable numbers in one phase-local tuning object.
+
+**Changes**
+- Added `TUNE` object in Phase 1 for win condition, corruption, ping noise, and purge values.
+- Added a dev-only Telemetry panel (toggle) showing live: corruption rate, ETA to failure, win checks/hold timer, purge stats.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js
+- docs/DEVLOG.md
+
+**How to test**
+1. Log in as PrymalChaos.
+2. Enter Phase 1, open DEV panel, tap “Telemetry (dev)”.
+3. Confirm telemetry updates while playing (signal/sps/corruption/rate/ETAs).
+4. Buy Noise Canceller and confirm corruption rate decreases.

@@ -16,3 +16,11 @@
 ## [save-persistence] - 2025-12-28
 ### Fixed
 - Prevent overwriting an existing cloud save with a fresh default state when logging in on a new browser/device.
+
+
+## [2025-12-28d] - 2025-12-28
+### Added
+- Phase 1 dev-only telemetry panel (live rate/ETAs/win checks).
+### Changed
+- Phase 1 tuning values centralized into a `TUNE` object for easier balancing.
+- Plugin loader BUILD bumped for cache busting.

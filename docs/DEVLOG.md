@@ -29,25 +29,20 @@
 - Admin functions intentionally not included (deferred).
 - BUILD stamp in pluginLoader can be bumped if mobile caching shows old UI.
 
----
 
-## 2025-12-28 (Sydney) – Fix cloud save persistence across browsers
-**Bug**
-- Logging in on a different browser/device started a fresh game.
+## 2025-12-28 (Sydney) – Mobile double-tap zoom suppression
+**Goal**
+- Prevent iOS Safari double-tap zoom so rapid button tapping doesn't zoom the page.
 
-**Cause**
-- App boot runs before login, so cloud save can't be loaded yet.
-- On login, the auth change handler saved the default state immediately, overwriting the user's existing cloud save.
-
-**Fix**
-- Track `lastAuthUserId` in memory.
-- When auth user changes, load the cloud save first (`loadSave()`), then route/switch phase, apply offline progress, and save.
-- On logout, reset to default state.
+**Changes**
+- Updated viewport meta to disable user scaling.
+- Added touch-action: manipulation for html/body and interactive elements.
+- Added touchend/gesturestart handlers to suppress double-tap and pinch zoom.
 
 **Files touched**
-- src/core/boot.js
+- index.html
 
 **How to test**
-1. Play Phase 1 for ~30 seconds so it autosaves.
-2. Open the game in a different browser (or private window), log into the same account.
-3. It should load the existing save (not reset), and show an offline report.
+1. Open game on iPhone Safari.
+2. Rapidly tap Ping/Purge/Buy buttons.
+3. Page should not zoom in/out on double taps.

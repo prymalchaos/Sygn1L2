@@ -3,34 +3,25 @@ import { loadPlugins, getPlugin } from "./pluginLoader.js";
 import { createDefaultState, clone } from "./state.js";
 import { loadSave, saveState } from "./save.js";
 import { supabase } from "./supabaseClient.js";
+import { debounce } from "./debounce.js";
 
 const AUTOSAVE_MS = 45_000;
+const TICK_MS = 250; // BATTERY MODE
+
 let state = createDefaultState();
 
 let mountEl;
 let activePluginId = null;
 let activePlugin = null;
 let profile = null;
+
 let autosaveTimer = null;
+let tickTimer = null;
+let lastTickAt = Date.now();
 
 function isMissingSession(err) {
   const msg = (err?.message || String(err || "")).toLowerCase();
   return msg.includes("auth session missing");
-}
-
-function apiFactory() {
-  return {
-    supabase,
-    getState: () => clone(state),
-    setState: (next) => { state = next; },
-    getProfile: () => (profile ? { ...profile } : null),
-    setPhase: async (phaseId) => {
-      state.phase = phaseId;
-      await switchPhase(phaseId);
-      await saveNow();
-    },
-    saveNow: async () => { await saveNow(); },
-  };
 }
 
 async function getSessionUser() {
@@ -48,6 +39,36 @@ async function fetchMyProfile(userId) {
 
   if (error) throw error;
   return data ?? null;
+}
+
+async function saveNow() {
+  state.meta.lastSaveAt = Date.now();
+  await saveState(state); // saveState safely no-ops if logged out
+}
+
+const saveSoon = debounce(() => {
+  saveNow().catch((e) => console.warn(e));
+}, 600);
+
+function apiFactory() {
+  return {
+    supabase,
+
+    getState: () => clone(state),
+    setState: (next) => { state = next; },
+
+    getProfile: () => (profile ? { ...profile } : null),
+
+    setPhase: async (phaseId) => {
+      state.phase = phaseId;
+      await switchPhase(phaseId);
+      await saveNow();
+    },
+
+    // Use this for important actions (ping, buy, etc.)
+    saveSoon: () => saveSoon(),
+    saveNow: async () => { await saveNow(); },
+  };
 }
 
 /**
@@ -76,7 +97,6 @@ async function ensureRoutingAfterAuth() {
     return;
   }
 
-  // Has profile
   if (state.phase === "phase0_onboarding") state.phase = "phase1";
   await switchPhase(state.phase);
 }
@@ -86,9 +106,12 @@ function applyOfflineProgressIfAny() {
   const last = state.meta.lastSeenAt || now;
   const dtMs = Math.max(0, now - last);
 
+  // Always update lastSeenAt on boot
+  state.meta.lastSeenAt = now;
+
   if (dtMs < 1000) {
-    state.meta.lastSeenAt = now;
     state.meta.offlineSummary = [];
+    state.meta.offlineNeedsAck = false;
     return;
   }
 
@@ -101,17 +124,14 @@ function applyOfflineProgressIfAny() {
     const res = plugin.applyOfflineProgress({ state: phaseState, dtMs, api });
 
     if (res?.state) state.phases[phaseId] = res.state;
-    state.meta.offlineSummary = Array.isArray(res?.summary) ? res.summary : [];
+
+    const summary = Array.isArray(res?.summary) ? res.summary : [];
+    state.meta.offlineSummary = summary;
+    state.meta.offlineNeedsAck = summary.length > 0;
   } else {
     state.meta.offlineSummary = [];
+    state.meta.offlineNeedsAck = false;
   }
-
-  state.meta.lastSeenAt = now;
-}
-
-async function saveNow() {
-  state.meta.lastSaveAt = Date.now();
-  await saveState(state); // saveState safely no-ops if logged out
 }
 
 async function switchPhase(id) {
@@ -156,10 +176,39 @@ function startAutosaveLoop() {
   }, AUTOSAVE_MS);
 }
 
+function startTickLoop() {
+  if (tickTimer) clearInterval(tickTimer);
+  lastTickAt = Date.now();
+
+  tickTimer = setInterval(() => {
+    const now = Date.now();
+    const dtMs = Math.max(0, now - lastTickAt);
+    lastTickAt = now;
+
+    if (!activePlugin?.tick) return;
+
+    const phaseId = state.phase;
+    // No ticking in onboarding
+    if (phaseId === "phase0_onboarding") return;
+
+    const api = apiFactory();
+    const phaseState = state.phases[phaseId] ?? {};
+
+    try {
+      const res = activePlugin.tick({ state: phaseState, dtMs, api });
+      if (res?.state) state.phases[phaseId] = res.state;
+      // If plugin signals “important event”, it can call api.saveSoon()
+    } catch (e) {
+      console.warn("Tick error:", e);
+    }
+  }, TICK_MS);
+}
+
 async function start() {
   await loadPlugins();
 
-  const saved = await loadSave(); // safe even when logged out
+  // Load save if possible (safe when logged out)
+  const saved = await loadSave();
   if (saved) state = saved;
 
   const app = document.getElementById("app");
@@ -167,9 +216,10 @@ async function start() {
 
   installSaveTriggers();
   startAutosaveLoop();
+  startTickLoop();
 
-  // Auth state changes (login/logout)
-  supabase.auth.onAuthStateChange(async (_event, _session) => {
+  // Auth state changes
+  supabase.auth.onAuthStateChange(async () => {
     await ensureRoutingAfterAuth();
     await saveNow();
   });
@@ -177,7 +227,7 @@ async function start() {
   // Initial route
   await ensureRoutingAfterAuth();
 
-  // If we landed into a non-onboarding phase, apply offline gains
+  // Apply offline gains if in a playable phase
   if (state.phase !== "phase0_onboarding") {
     applyOfflineProgressIfAny();
     await saveNow();

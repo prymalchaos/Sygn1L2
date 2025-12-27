@@ -102,3 +102,31 @@
 3. Use Purge once: one-time comms beat fires.
 4. Meet win eligibility: stabilisation window beat fires.
 5. Refresh or log in from another browser: milestones do not repeat.
+
+
+## 2025-12-28 (Sydney) – Phase 2 Engineering prototype (Power + Heat + Reroute)
+**Goal**
+- Turn Phase 2 from a placeholder into a distinct, modular gameplay loop.
+- Add a new resource (Power) and a new pressure mechanic (Heat) with risk/reward decisions.
+
+**Changes**
+- Implemented Phase 2 plugin with:
+  - Power generation (PPS), Heat pressure (0–100), and Reroute toggle.
+  - Reroute boosts SPS but drains power and adds heat. Auto-disengages when power hits 0.
+  - Vent action to spend Power to reduce Heat (with cooldown).
+  - Overheat lockout overlay with cooldown.
+  - Upgrade shop: Aux Generator, Thermal Insulation, Reroute Dampers, Pressure Vents.
+  - Comms/Transmission logs + dev tools.
+- Updated Phase 2 default state (schema bumped to 5).
+- Bumped plugin loader BUILD for cache busting.
+
+**Files touched**
+- src/plugins/phase2/plugin.js
+- src/core/state.js
+- src/core/pluginLoader.js
+
+**How to test**
+1. Win Phase 1 and continue to Phase 2 (or use dev tools if available).
+2. Watch Power tick up; use Reroute to boost Signal, observe Power drain + Heat rise.
+3. Use Vent to reduce Heat; confirm cooldown.
+4. Let Heat reach 100% to trigger Overheat lockout overlay.

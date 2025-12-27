@@ -37,3 +37,11 @@
 
 ### Changed
 - Plugin loader BUILD bumped to force fresh phase module loads.
+
+## [2025-12-28e] - 2025-12-28
+### Added
+- Phase 2 Engineering prototype: Power + Heat + Reroute loop, Vent action, overheat lockout, upgrades, logs.
+### Changed
+- Default state schema bumped to 5 with Phase 2 state fields.
+- Plugin loader BUILD bumped for cache-busting.
+

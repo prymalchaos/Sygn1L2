@@ -6,6 +6,7 @@ export function createDefaultState() {
       lastSeenAt: now,
       lastSaveAt: 0,
       offlineSummary: [],
+      offlineNeedsAck: false,
     },
     phase: "phase0_onboarding",
     phases: {
@@ -15,7 +16,6 @@ export function createDefaultState() {
       phase1: {
         signal: 0,
         signalPerSecond: 1,
-        lastOfflineReport: null,
       },
     },
   };

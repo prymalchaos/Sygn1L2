@@ -42,31 +42,43 @@ function nowStamp() {
   return `${hh}:${mm}:${ss}`;
 }
 
-function attachFastTap(el, handler) {
-  if (!el) return;
-  // Click for desktop / fallback
-  el.addEventListener("click", (e) => {
-    // If pointerdown already handled touch, skip duplicate
-    if (el.__fastTapFired) {
-      el.__fastTapFired = false;
-      return;
-    }
-    handler(e);
-  });
-
-  // Pointerdown for instant response on touch
-  el.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "touch") {
-      e.preventDefault();
-      el.__fastTapFired = true;
-      handler(e);
-    }
-  }, { passive: false });
-}
-
 function pushLog(arr, line, max = 60) {
   arr.push(`[${nowStamp()}] ${line}`);
   while (arr.length > max) arr.shift();
+}
+
+
+function fireMilestone(p1, key, channel, line) {
+  p1.flags ??= {};
+  if (p1.flags[key]) return false;
+  p1.flags[key] = true;
+  if (channel === "comms") pushLog(p1.comms, line);
+  else pushLog(p1.transmission, line);
+  return true;
+}
+
+function processMilestones(p1) {
+  // Signal beats
+  const s = p1.signal || 0;
+  if (s >= 250)  fireMilestone(p1, "sig250", "comms", "CONTROL//NOTE  Minimal lock achieved. Keep pressure steady.");
+  if (s >= 1000) fireMilestone(p1, "sig1k", "transmission", "OPS//UPDATE  Signal is climbing. Instruments look… less angry.");
+  if (s >= 5000) fireMilestone(p1, "sig5k", "comms", "CONTROL//WARN  High gain detected. Corruption will respond.");
+  if (s >= (TUNE.winSignal || 12000)) fireMilestone(p1, "sigWin", "transmission", "OPS//MARK  Win threshold reached. Hold stability.");
+
+  // First upgrade / purge
+  const upgradesOwned =
+    (p1.upgrades?.noiseCanceller || 0) > 0 ||
+    (p1.upgrades?.purgeEfficiency || 0) > 0 ||
+    (p1.upgrades?.spsBoost || 0) > 0 ||
+    (p1.upgrades?.pingBoost || 0) > 0 ||
+    (p1.upgrades?.spsMult || 0) > 0;
+
+  if (upgradesOwned) fireMilestone(p1, "firstUpgrade", "transmission", "MORRIS HARDY//OPS  There. Hear that? That's the sound of not doing everything yourself.");
+
+  if ((p1.stats?.purges || 0) > 0) fireMilestone(p1, "firstPurge", "comms", "CONTROL//RETURN  Purge cycle responded. Temporary integrity restored.");
+
+  // Stabilisation window
+  if (isWinStable(p1)) fireMilestone(p1, "stabiliseWindow", "comms", "CONTROL//LOCK  Stabilisation window open. Maintain parameters for 10 seconds.");
 }
 
 const UPGRADE_DEFS = [
@@ -229,6 +241,8 @@ export default {
     p1.comms ??= [];
     p1.transmission ??= [];
     p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+    p1.flags ??= {};
+    p1.stats ??= { purges: 0, upgradesBought: 0 };
 
     api.setState(stInit);
 
@@ -494,6 +508,8 @@ export default {
       const st = api.getState();
       const p1 = st.phases.phase1;
       p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+    p1.flags ??= {};
+    p1.stats ??= { purges: 0, upgradesBought: 0 };
 
       $shop.innerHTML = "";
 
@@ -527,7 +543,7 @@ export default {
             </div>
           </div>
         `;
-        attachFastTap(row.querySelector(`[data-buy="${def.id}"]`), () => buy(def.id));
+        row.querySelector(`[data-buy="${def.id}"]`).onclick = () => buy(def.id);
         $shop.appendChild(row);
       }
     }
@@ -536,6 +552,8 @@ export default {
       const st = api.getState();
       const p1 = st.phases.phase1;
       p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+    p1.flags ??= {};
+    p1.stats ??= { purges: 0, upgradesBought: 0 };
 
       const def = UPGRADE_DEFS.find((u) => u.id === upgradeId);
       if (!def) return;
@@ -548,6 +566,8 @@ export default {
 
       p1.signal -= cost;
       def.apply(p1, nextLvl);
+      p1.stats ??= { purges: 0, upgradesBought: 0 };
+      p1.stats.upgradesBought = (p1.stats.upgradesBought || 0) + 1;
 
       pushLog(p1.transmission, `UPGRADE//ACQUIRED  ${def.name} → Level ${nextLvl}`);
       api.setState(st);
@@ -566,6 +586,8 @@ export default {
       const amt = purgeAmount(p1);
       p1.signal -= cost;
       p1.corruption = clamp((p1.corruption || 0) - amt, 0, 100);
+      p1.stats ??= { purges: 0, upgradesBought: 0 };
+      p1.stats.purges = (p1.stats.purges || 0) + 1;
 
       pushLog(p1.transmission, `PURGE//EXEC  -${Math.floor(amt)}% corruption`);
       api.setState(st);
@@ -573,7 +595,7 @@ export default {
       render();
     }
 
-    attachFastTap(root.querySelector("#ping"), () => {
+    root.querySelector("#ping").onclick = () => {
       const st = api.getState();
       const p1 = st.phases.phase1;
       if (p1.isDefeated) return;
@@ -586,11 +608,11 @@ export default {
       api.setState(st);
       api.saveSoon();
       render();
-    });
+    };
 
-    attachFastTap(root.querySelector("#purge"), () => doPurge());
+    root.querySelector("#purge").onclick = () => doPurge();
 
-// Dev tools
+    // Dev tools
     if (isDev) {
       const devMsg = root.querySelector("#devMsg");
       const setDevMsg = (t) => { devMsg.textContent = t || ""; };
@@ -646,7 +668,7 @@ export default {
         api.setState(st);
         api.saveSoon();
         await api.setPhase("phase2");
-      });
+      };
     }
 
     // Offline overlay (ACK)
@@ -660,7 +682,7 @@ export default {
       offlineBody.innerHTML = `<ul style="margin:0; padding-left:18px;">${items}</ul>`;
       offlineOverlay.style.display = "block";
 
-      attachFastTap(offlineAck, () => {
+      offlineAck.onclick = () => {
         const st = api.getState();
         st.meta.offlineNeedsAck = false;
         st.meta.offlineSummary = [];
@@ -675,7 +697,7 @@ export default {
     const defeatBody = root.querySelector("#defeatBody");
     const restartBtn = root.querySelector("#restart");
 
-    attachFastTap(restartBtn, () => {
+    restartBtn.onclick = () => {
       const st = api.getState();
       const p1 = st.phases.phase1;
 
@@ -704,7 +726,7 @@ export default {
       winOverlay.style.display = "none";
       await api.setPhase("phase2");
     };
-    stayBtn.onclick = () => { winOverlay.style.display = "none"; });
+    stayBtn.onclick = () => { winOverlay.style.display = "none"; };
 
     function maybeWarn(p1) {
       const c = p1.corruption || 0;
@@ -743,6 +765,7 @@ export default {
       lines.push(`Eligible: ${stable ? "YES" : "NO"} | Hold remaining: ${Math.ceil(remainingMs/1000)}s`);
       lines.push(`Purge: cost ${nfmt(purgeC)} | amount -${Math.floor(purgeA)}% | Ping noise +${pingNoise.toFixed(2)}%`);
       lines.push(`Upgrades: spsBoost ${p1.upgrades?.spsBoost||0} | pingBoost ${p1.upgrades?.pingBoost||0} | spsMult ${p1.upgrades?.spsMult||0} | noiseCanceller ${p1.upgrades?.noiseCanceller||0} | purgeEff ${p1.upgrades?.purgeEfficiency||0}`);
+      lines.push(`Milestones: ${Object.keys(p1.flags || {}).join(', ') || '(none)'}`);
       return lines.join("\n");
     }
 
@@ -814,6 +837,13 @@ function render() {
     const repaint = setInterval(() => {
       const st = api.getState();
       maybeWarn(st.phases.phase1);
+      const beforeFlags = JSON.stringify(st.phases.phase1.flags || {});
+      processMilestones(st.phases.phase1);
+      const afterFlags = JSON.stringify(st.phases.phase1.flags || {});
+      if (beforeFlags !== afterFlags) {
+        api.setState(st);
+        api.saveSoon();
+      }
       render();
     }, 500);
 
@@ -838,7 +868,8 @@ function render() {
     if (state.corruption >= 100) {
       state.isDefeated = true;
       state.winHoldMs = 0;
-      return { state };
+      processMilestones(state);
+    return { state };
     }
 
     // Win stability timer

@@ -9,30 +9,32 @@ function fmtMs(ms) {
   return `${m}m ${r}s`;
 }
 
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 export default {
   id: "phase1",
 
   mount(root, api) {
-    let raf = null;
-    let last = Date.now();
-
     const profile = api.getProfile();
-    const isDev = profile?.username === "PrymalChaos";
+    const isDev = profile?.username === "PrymalChaos" || profile?.role === "admin";
 
     root.innerHTML = `
       <div style="max-width: 760px; margin: 0 auto; padding: 14px;">
-        <div style="border:1px solid rgba(215,255,224,0.18); border-radius:12px; padding:14px; background: rgba(10,14,18,0.7);">
+        <div style="border:1px solid rgba(215,255,224,0.18); border-radius:12px; padding:14px; background: rgba(10,14,18,0.7); position:relative;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
             <div>
               <div style="opacity:0.85; font-size:13px;">Logged in as</div>
-              <div style="font-weight:700; letter-spacing:0.05em;">${profile?.username ?? "UNKNOWN"}</div>
+              <div style="font-weight:700; letter-spacing:0.05em;">${escapeHtml(profile?.username ?? "UNKNOWN")}</div>
             </div>
             <button id="logout" style="padding:10px; border-radius:10px;">Logout</button>
           </div>
 
           <hr style="border:0; border-top:1px solid rgba(215,255,224,0.12); margin:14px 0;">
-
-          <div id="offline" style="font-size:13px; opacity:0.9; margin-bottom:10px;"></div>
 
           <div style="display:grid; gap:10px;">
             <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
@@ -63,32 +65,25 @@ export default {
             </div>
             <div id="devMsg" style="margin-top:10px; font-size:13px; opacity:0.9;"></div>
           </div>
+
+          <div id="offlineOverlay" style="display:none; position:absolute; inset:0; border-radius:12px; background: rgba(5,7,10,0.92); padding:14px;">
+            <div style="border:1px solid rgba(215,255,224,0.18); border-radius:12px; padding:14px; background: rgba(10,14,18,0.85);">
+              <div style="font-weight:800; letter-spacing:0.06em;">RETURN REPORT</div>
+              <div id="offlineBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
+              <button id="offlineAck" style="margin-top:12px; padding:10px; border-radius:10px; width:100%;">ACK</button>
+            </div>
+          </div>
+
         </div>
       </div>
     `;
 
     const $signal = root.querySelector("#signal");
     const $sps = root.querySelector("#sps");
-    const $offline = root.querySelector("#offline");
 
-    const $logout = root.querySelector("#logout");
-    $logout.onclick = async () => {
+    root.querySelector("#logout").onclick = async () => {
       await api.supabase.auth.signOut();
     };
-
-    // Show offline summary (from core boot)
-    const st0 = api.getState();
-    const summary = st0.meta.offlineSummary || [];
-    if (summary.length) {
-      $offline.innerHTML = `<div style="padding:10px; border-radius:10px; border:1px solid rgba(215,255,224,0.15); background: rgba(5,7,10,0.7);">
-        <div style="font-weight:700; margin-bottom:6px;">While you were away</div>
-        <ul style="margin:0; padding-left:18px;">
-          ${summary.map((x) => `<li>${x}</li>`).join("")}
-        </ul>
-      </div>`;
-    } else {
-      $offline.textContent = "";
-    }
 
     const pingBtn = root.querySelector("#ping");
     const boostBtn = root.querySelector("#boost");
@@ -97,6 +92,7 @@ export default {
       const st = api.getState();
       st.phases.phase1.signal += 5;
       api.setState(st);
+      api.saveSoon();
       render();
     };
 
@@ -104,10 +100,11 @@ export default {
       const st = api.getState();
       st.phases.phase1.signalPerSecond = +(st.phases.phase1.signalPerSecond + 0.5).toFixed(2);
       api.setState(st);
+      api.saveSoon();
       render();
     };
 
-    // Dev tools (only show for PrymalChaos)
+    // Dev tools
     if (isDev) {
       const devMsg = root.querySelector("#devMsg");
       const setDevMsg = (t) => { devMsg.textContent = t || ""; };
@@ -124,6 +121,7 @@ export default {
         const st = api.getState();
         st.phases.phase1.signal += 1000;
         api.setState(st);
+        api.saveSoon();
         setDevMsg("Granted +1000 signal.");
         render();
       };
@@ -136,6 +134,27 @@ export default {
       };
     }
 
+    // Offline overlay (ACK)
+    const overlay = root.querySelector("#offlineOverlay");
+    const body = root.querySelector("#offlineBody");
+    const ack = root.querySelector("#offlineAck");
+
+    const st0 = api.getState();
+    if (st0.meta.offlineNeedsAck && (st0.meta.offlineSummary || []).length) {
+      const items = st0.meta.offlineSummary.map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+      body.innerHTML = `<ul style="margin:0; padding-left:18px;">${items}</ul>`;
+      overlay.style.display = "block";
+
+      ack.onclick = () => {
+        const st = api.getState();
+        st.meta.offlineNeedsAck = false;
+        st.meta.offlineSummary = [];
+        api.setState(st);
+        api.saveSoon();
+        overlay.style.display = "none";
+      };
+    }
+
     function render() {
       const st = api.getState();
       const p1 = st.phases.phase1;
@@ -143,35 +162,17 @@ export default {
       $sps.textContent = p1.signalPerSecond.toString();
     }
 
-    function loop() {
-      const now = Date.now();
-      const dt = Math.max(0, now - last);
-      last = now;
-
-      const st = api.getState();
-      const p1 = st.phases.phase1;
-      p1.signal += p1.signalPerSecond * (dt / 1000);
-      api.setState(st);
-
-      render();
-      raf = requestAnimationFrame(loop);
-    }
-
     render();
-    raf = requestAnimationFrame(loop);
-
-    // Store cleanup
-    this._cleanup = () => {
-      if (raf) cancelAnimationFrame(raf);
-    };
   },
 
-  unmount() {
-    if (this._cleanup) this._cleanup();
+  // Core tick calls this in BATTERY MODE
+  tick({ state, dtMs }) {
+    const sps = state.signalPerSecond || 0;
+    state.signal = (state.signal || 0) + sps * (dtMs / 1000);
+    return { state };
   },
 
   applyOfflineProgress({ state, dtMs }) {
-    // Closed form idle gain
     const before = state.signal || 0;
     const sps = state.signalPerSecond || 0;
     const gain = sps * (dtMs / 1000);
@@ -180,6 +181,7 @@ export default {
     const summary = [
       `Offline for ${fmtMs(dtMs)}`,
       `Generated +${Math.floor(gain)} signal`,
+      `New total: ${Math.floor(state.signal)} signal`,
     ];
 
     return { state, summary };

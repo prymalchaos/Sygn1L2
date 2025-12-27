@@ -81,6 +81,32 @@ function processMilestones(p1) {
   if (isWinStable(p1)) fireMilestone(p1, "stabiliseWindow", "comms", "CONTROL//LOCK  Stabilisation window open. Maintain parameters for 10 seconds.");
 }
 
+
+function attachFastTap(el, handler) {
+  if (!el) return;
+  // click fallback
+  el.addEventListener("click", (e) => {
+    if (el.__fastTapFired) {
+      el.__fastTapFired = false;
+      return;
+    }
+    handler(e);
+  });
+  // instant touch response
+  el.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.pointerType === "touch") {
+        e.preventDefault();
+        el.__fastTapFired = true;
+        handler(e);
+      }
+    },
+    { passive: false }
+  );
+}
+
+
 const UPGRADE_DEFS = [
   {
     id: "spsBoost",
@@ -143,6 +169,25 @@ const UPGRADE_DEFS = [
     effectText: (lvl) => `+${Math.floor((lvl + 1) * 10)}% purge power`,
     apply: (p1, nextLvl) => {
       p1.upgrades.purgeEfficiency = nextLvl;
+    },
+  },
+
+  {
+    id: "autopilotCore",
+    name: "AUTOPILOT CORE",
+    desc: "Auto-purges to hold corruption at 40% using 35% of earned signal.",
+    base: 260,
+    growth: 2.05,
+    effectText: (lvl, p1) => {
+      const ap = p1.autopilot;
+      const state = ap?.unlocked ? (ap.enabled ? "ON" : "OFF") : "LOCKED";
+      return `Status: ${state} • Target 40% • Budget 35%`;
+    },
+    apply: (p1, nextLvl) => {
+      p1.upgrades.autopilotCore = nextLvl;
+      p1.autopilot ??= { unlocked: false, enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95, budget: 0 };
+      p1.autopilot.unlocked = true;
+      p1.autopilot.enabled = true;
     },
   },
 ];
@@ -213,6 +258,38 @@ function isWinStable(p1) {
     isDefensiveReady(p1) &&
     !p1.isDefeated
   );
+
+function autoPurge(p1, budget) {
+  const ap = p1.autopilot;
+  if (!ap?.unlocked || !ap.enabled) return { budget, purges: 0, spent: 0 };
+
+  const target = ap.targetCorruption ?? 40;
+  let purges = 0;
+  let spent = 0;
+
+  // Only engage if above target.
+  while ((p1.corruption || 0) > target) {
+    const cost = purgeCost(p1);
+    if ((p1.signal || 0) < cost) break;
+    if (budget < cost) break;
+
+    const amt = purgeAmount(p1);
+    p1.signal -= cost;
+    budget -= cost;
+    spent += cost;
+    purges += 1;
+
+    p1.corruption = clamp((p1.corruption || 0) - amt, 0, 100);
+
+    if ((p1.corruption || 0) <= target) break;
+    // Safety break in case something goes weird
+    if (purges > 999) break;
+  }
+
+  return { budget, purges, spent };
+}
+
+
 }
 
 export default {
@@ -240,7 +317,7 @@ export default {
 
     p1.comms ??= [];
     p1.transmission ??= [];
-    p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+    p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0,  autopilotCore: 0 };
     p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
 
@@ -378,6 +455,7 @@ export default {
             <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
               <button id="ping" class="p1-btn" style="flex:1; min-width:160px;">Ping</button>
               <button id="purge" class="p1-btn" style="flex:1; min-width:160px;">Purge</button>
+              <button id="autopilot" class="p1-btn" style="flex:1; min-width:160px;">Autopilot</button>
             </div>
             <div id="hint" style="margin-top:8px; font-size:12px; opacity:0.85;"></div>
           </div>
@@ -507,7 +585,7 @@ export default {
     function renderShop() {
       const st = api.getState();
       const p1 = st.phases.phase1;
-      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0,  autopilotCore: 0 };
     p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
 
@@ -529,7 +607,7 @@ export default {
               <div style="font-weight:900; letter-spacing:0.03em;">${escapeHtml(def.name)}</div>
               <div style="opacity:0.82; font-size:12px; margin-top:4px;">${escapeHtml(def.desc)}</div>
               <div style="opacity:0.92; font-size:12px; margin-top:6px;">
-                Level <b>${lvl}</b> → ${escapeHtml(def.effectText(lvl))}
+                Level <b>${lvl}</b> → ${escapeHtml(def.effectText(lvl, p1))}
               </div>
             </div>
 
@@ -543,7 +621,7 @@ export default {
             </div>
           </div>
         `;
-        row.querySelector(`[data-buy="${def.id}"]`).onclick = () => buy(def.id);
+        attachFastTap(row.querySelector(`[data-buy="${def.id}"]`), () => buy(def.id));
         $shop.appendChild(row);
       }
     }
@@ -551,7 +629,7 @@ export default {
     function buy(upgradeId) {
       const st = api.getState();
       const p1 = st.phases.phase1;
-      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0,  autopilotCore: 0 };
     p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
 
@@ -595,7 +673,7 @@ export default {
       render();
     }
 
-    root.querySelector("#ping").onclick = () => {
+    attachFastTap(root.querySelector("#ping"), () => {
       const st = api.getState();
       const p1 = st.phases.phase1;
       if (p1.isDefeated) return;
@@ -608,11 +686,27 @@ export default {
       api.setState(st);
       api.saveSoon();
       render();
-    };
+    });
 
-    root.querySelector("#purge").onclick = () => doPurge();
+    attachFastTap(root.querySelector("#purge"), () => doPurge());
 
-    // Dev tools
+    attachFastTap(root.querySelector("#autopilot"), () => {
+      const st = api.getState();
+      const p1 = st.phases.phase1;
+      p1.autopilot ??= { unlocked: false, enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95, budget: 0 };
+
+      if (!p1.autopilot.unlocked) {
+        pushLog(p1.comms, "CONTROL//NOTE  Autopilot not installed.");
+      } else {
+        p1.autopilot.enabled = !p1.autopilot.enabled;
+        pushLog(p1.transmission, `AUTOPILOT//${p1.autopilot.enabled ? "ENGAGED" : "DISENGAGED"}  Target ${p1.autopilot.targetCorruption}%`);
+      }
+
+      api.setState(st);
+      api.saveSoon();
+      render();
+    });
+// Dev tools
     if (isDev) {
       const devMsg = root.querySelector("#devMsg");
       const setDevMsg = (t) => { devMsg.textContent = t || ""; };
@@ -788,6 +882,14 @@ function render() {
       $hint.textContent = `Corruption rate: ${rate.toFixed(2)}/s • Purge: -${Math.floor(purgeA)}% for ${nfmt(purgeC)} signal • ${winProgressText(p1)}`;
 
       renderShop();
+      // Autopilot button label
+      const apBtn = root.querySelector("#autopilot");
+      const ap = p1.autopilot;
+      if (apBtn) {
+        if (!ap?.unlocked) apBtn.textContent = "Autopilot: LOCKED";
+        else apBtn.textContent = `Autopilot: ${ap.enabled ? "ON" : "OFF"}`;
+      }
+
 
       $comms.textContent = (p1.comms || []).join("\n");
       $tx.textContent = (p1.transmission || []).join("\n");
@@ -861,9 +963,26 @@ function render() {
     const sps = state.signalPerSecond || 0;
     state.signal = (state.signal || 0) + sps * (dtMs / 1000);
 
-    // Corruption pressure
+    
+    // Autopilot budget accrues from earned signal (not from your existing stash)
+    state.autopilot ??= { unlocked: false, enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95, budget: 0 };
+    if (state.autopilot.unlocked && state.autopilot.enabled) {
+      const gain = sps * (dtMs / 1000);
+      state.autopilot.budget = (state.autopilot.budget || 0) + gain * (state.autopilot.budgetFraction ?? 0.35);
+    }
+// Corruption pressure
     const rate = computeCorruptionRate(state);
     state.corruption = clamp((state.corruption || 0) + rate * (dtMs / 1000), 0, 100);
+
+    
+    // Autopilot auto-purge after corruption advances
+    if (state.autopilot?.unlocked && state.autopilot.enabled) {
+      const res = autoPurge(state, state.autopilot.budget || 0);
+      state.autopilot.budget = res.budget;
+      if (res.purges > 0) {
+        pushLog(state.transmission, `AUTOPILOT//PURGE x${res.purges}  Spent ${nfmt(res.spent)} signal`);
+      }
+    }
 
     if (state.corruption >= 100) {
       state.isDefeated = true;
@@ -916,7 +1035,27 @@ function render() {
     const rate = computeCorruptionRate(state);
     state.corruption = clamp(beforeCorr + rate * (dtMs / 1000), 0, 100);
 
-    if (state.corruption >= 100) {
+    
+
+    // Autopilot offline: spend a fraction of earned signal to hold corruption under target
+    state.autopilot ??= { unlocked: false, enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95, budget: 0 };
+    let autoPurges = 0;
+    let autoSpent = 0;
+    if (state.autopilot.unlocked && state.autopilot.enabled) {
+      const budget = Math.max(0, gain * (state.autopilot.budgetFraction ?? 0.35));
+      const res = autoPurge(state, budget);
+      autoPurges = res.purges;
+      autoSpent = res.spent;
+    }
+
+    // Offline safety: never hard-lose while away. Clamp to offlineCap.
+    const cap = state.autopilot?.offlineCap ?? 95;
+    if (state.corruption > cap) {
+      state.corruption = cap;
+    }
+
+    state.isDefeated = false;
+if (state.corruption >= 100) {
       state.isDefeated = true;
       state.winHoldMs = 0;
     }
@@ -929,6 +1068,9 @@ function render() {
       `Generated +${Math.floor(gain)} signal`,
       `Corruption: ${Math.floor(beforeCorr)}% → ${Math.floor(state.corruption)}%`,
     ];
+
+    if (autoPurges > 0) summary.push(`Autopilot executed ${autoPurges} purge(s) (spent ${nfmt(autoSpent)} signal)`);
+
 
     if (state.isDefeated) summary.push(`SYSTEM FAILURE occurred while offline.`);
     else summary.push(`Stabilisation timer resets while offline.`);

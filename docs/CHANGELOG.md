@@ -24,3 +24,7 @@
 ### Changed
 - Phase 1 tuning values centralized into a `TUNE` object for easier balancing.
 - Plugin loader BUILD bumped for cache busting.
+
+
+### Fixed
+- Phase 1 telemetry panel now displays metrics (was empty).

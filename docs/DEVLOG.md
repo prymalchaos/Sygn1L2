@@ -67,3 +67,12 @@
 2. Enter Phase 1, open DEV panel, tap “Telemetry (dev)”.
 3. Confirm telemetry updates while playing (signal/sps/corruption/rate/ETAs).
 4. Buy Noise Canceller and confirm corruption rate decreases.
+
+
+## 2025-12-28 (Sydney) – Telemetry panel population fix
+**Fix**
+- Phase 1 telemetry panel now renders live metrics instead of staying blank.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js

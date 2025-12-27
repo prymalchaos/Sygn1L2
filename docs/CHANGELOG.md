@@ -1,13 +1,11 @@
 # Changelog
 
-## [2025-12-28b] - 2025-12-28
+## [2025-12-28c] - 2025-12-28
 ### Added
-- Phase 1 console layout: panels, scanlines, scope+osc visuals.
-- Corruption pressure + defeat overlay + restart.
-- Comms/transmission logs.
-- New upgrades: Noise Canceller, Purge Manifold.
-- Purge action (burn signal to reduce corruption).
+- Phase 1 completion system (stabilisation timer + win overlay).
+- Phase 2 placeholder plugin.
+- Persistent phase unlocks via meta.unlockedPhases.
 
 ### Changed
-- Phase 1 state schema bumped to 3 with corruption + logs + new upgrades.
-- Plugin loader includes BUILD cache-busting for phase modules.
+- Plugin loader now loads phase2.
+- Default state schema bumped to 4.

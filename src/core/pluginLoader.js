@@ -1,10 +1,10 @@
 // src/core/pluginLoader.js
 // Loads phase plugins as ES modules.
-// IMPORTANT: GitHub Pages + mobile browsers can cache modules aggressively.
-// The BUILD stamp forces fresh plugin loads when you bump it.
+// GitHub Pages + mobile browsers cache modules aggressively.
+// Bump BUILD to force fresh plugin loads.
 
 const plugins = new Map();
-const BUILD = "2025-12-28a";
+const BUILD = "2025-12-28b";
 
 export async function loadPlugins() {
   const pluginIds = [

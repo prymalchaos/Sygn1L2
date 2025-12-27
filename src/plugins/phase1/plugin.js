@@ -1,6 +1,9 @@
 import { wipeMySave } from "../../core/save.js";
 import { createDefaultState } from "../../core/state.js";
 
+const SUPABASE_URL = "https://raqqtppbtbcvkkenyqye.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_T913yWlRXNOAJt_rp81R8Q_NLshMz_i";
+
 function fmtMs(ms) {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
@@ -23,15 +26,12 @@ async function callFunction(api, name, payload) {
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) throw new Error("No session access token (not logged in)");
 
-  // Use your publishable key (safe to expose client-side)
-  const PUBLISHABLE_KEY = "sb_publishable_T913yWlRXNOAJt_rp81R8Q_NLshMz_i";
-  const url = `https://raqqtppbtbcvkkenyqye.supabase.co/functions/v1/${name}`;
-
+  const url = `${SUPABASE_URL}/functions/v1/${name}`;
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      apikey: PUBLISHABLE_KEY,
+      apikey: SUPABASE_PUBLISHABLE_KEY,
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload || {}),
@@ -39,14 +39,8 @@ async function callFunction(api, name, payload) {
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    // Bubble up the server's error message if present
-    throw new Error(json?.error || `Function ${name} failed (${res.status})`);
+    throw new Error(json?.error || json?.message || `Function ${name} failed (${res.status})`);
   }
-  return json;
-}
-
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.error || `Function ${name} failed (${res.status})`);
   return json;
 }
 
@@ -252,6 +246,7 @@ export default {
       $sps.textContent = p1.signalPerSecond.toString();
     }
 
+    // Battery-friendly repaint loop
     render();
     const repaintTimer = setInterval(render, 250);
 

@@ -39,6 +39,10 @@ export function createDefaultState() {
         transmission: [],
 
         // Upgrades (phase-local)
+        // Milestone persistence (phase-local)
+        flags: {},
+        stats: { purges: 0, upgradesBought: 0 },
+
         upgrades: {
           spsBoost: 0,
           pingBoost: 0,

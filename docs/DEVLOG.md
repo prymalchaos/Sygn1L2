@@ -78,20 +78,27 @@
 - src/core/pluginLoader.js
 
 
-## 2025-12-28 (Sydney) – Input responsiveness (anti-eaten taps)
+## 2025-12-28 (Sydney) – Phase 1 milestones + message beats
 **Goal**
-- Make rapid button tapping reliable on iPhone Safari (Ping/Purge/Buy).
+- Add pacing: milestone-triggered comms/transmission beats that fire once and persist across saves.
 
 **Changes**
-- Removed touchend preventDefault double-tap suppression script (it was cancelling synthetic clicks).
-- Added fast-tap handler using pointerdown (touch) + click fallback for instant, reliable taps on:
-  - Ping, Purge, upgrade Buy buttons, overlays.
+- Phase 1: Added milestone system using phase-local flags + stats:
+  - Signal milestones: 250 / 1k / 5k / win threshold.
+  - First upgrade purchased.
+  - First purge executed.
+  - Stabilisation window open (win eligible).
+- Milestones write short Alien-style log beats to COMMS/TRANSMISSION and persist.
+- Telemetry shows fired milestone keys.
 
 **Files touched**
-- index.html
 - src/plugins/phase1/plugin.js
+- src/core/state.js
+- src/core/pluginLoader.js
 
 **How to test**
-1. Open on iPhone Safari.
-2. Rapid tap Ping/Purge/Buy repeatedly.
-3. Taps should register nearly 1:1 (no missed presses).
+1. Start Phase 1 and reach 250/1,000/5,000 signal and watch logs.
+2. Buy first upgrade: one-time transmission beat fires.
+3. Use Purge once: one-time comms beat fires.
+4. Meet win eligibility: stabilisation window beat fires.
+5. Refresh or log in from another browser: milestones do not repeat.

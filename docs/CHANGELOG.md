@@ -28,3 +28,12 @@
 
 ### Fixed
 - Phase 1 telemetry panel now displays metrics (was empty).
+
+
+## [2025-12-28d] - 2025-12-28
+### Added
+- Phase 1 milestone system (one-time beats) persisted via phase-local flags/stats.
+- Telemetry shows fired milestones.
+
+### Changed
+- Plugin loader BUILD bumped to force fresh phase module loads.

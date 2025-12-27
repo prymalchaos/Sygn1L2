@@ -42,6 +42,28 @@ function nowStamp() {
   return `${hh}:${mm}:${ss}`;
 }
 
+function attachFastTap(el, handler) {
+  if (!el) return;
+  // Click for desktop / fallback
+  el.addEventListener("click", (e) => {
+    // If pointerdown already handled touch, skip duplicate
+    if (el.__fastTapFired) {
+      el.__fastTapFired = false;
+      return;
+    }
+    handler(e);
+  });
+
+  // Pointerdown for instant response on touch
+  el.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch") {
+      e.preventDefault();
+      el.__fastTapFired = true;
+      handler(e);
+    }
+  }, { passive: false });
+}
+
 function pushLog(arr, line, max = 60) {
   arr.push(`[${nowStamp()}] ${line}`);
   while (arr.length > max) arr.shift();
@@ -505,7 +527,7 @@ export default {
             </div>
           </div>
         `;
-        row.querySelector(`[data-buy="${def.id}"]`).onclick = () => buy(def.id);
+        attachFastTap(row.querySelector(`[data-buy="${def.id}"]`), () => buy(def.id));
         $shop.appendChild(row);
       }
     }
@@ -551,7 +573,7 @@ export default {
       render();
     }
 
-    root.querySelector("#ping").onclick = () => {
+    attachFastTap(root.querySelector("#ping"), () => {
       const st = api.getState();
       const p1 = st.phases.phase1;
       if (p1.isDefeated) return;
@@ -564,11 +586,11 @@ export default {
       api.setState(st);
       api.saveSoon();
       render();
-    };
+    });
 
-    root.querySelector("#purge").onclick = () => doPurge();
+    attachFastTap(root.querySelector("#purge"), () => doPurge());
 
-    // Dev tools
+// Dev tools
     if (isDev) {
       const devMsg = root.querySelector("#devMsg");
       const setDevMsg = (t) => { devMsg.textContent = t || ""; };
@@ -624,7 +646,7 @@ export default {
         api.setState(st);
         api.saveSoon();
         await api.setPhase("phase2");
-      };
+      });
     }
 
     // Offline overlay (ACK)
@@ -638,7 +660,7 @@ export default {
       offlineBody.innerHTML = `<ul style="margin:0; padding-left:18px;">${items}</ul>`;
       offlineOverlay.style.display = "block";
 
-      offlineAck.onclick = () => {
+      attachFastTap(offlineAck, () => {
         const st = api.getState();
         st.meta.offlineNeedsAck = false;
         st.meta.offlineSummary = [];
@@ -653,7 +675,7 @@ export default {
     const defeatBody = root.querySelector("#defeatBody");
     const restartBtn = root.querySelector("#restart");
 
-    restartBtn.onclick = () => {
+    attachFastTap(restartBtn, () => {
       const st = api.getState();
       const p1 = st.phases.phase1;
 
@@ -682,7 +704,7 @@ export default {
       winOverlay.style.display = "none";
       await api.setPhase("phase2");
     };
-    stayBtn.onclick = () => { winOverlay.style.display = "none"; };
+    stayBtn.onclick = () => { winOverlay.style.display = "none"; });
 
     function maybeWarn(p1) {
       const c = p1.corruption || 0;

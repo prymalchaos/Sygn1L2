@@ -38,9 +38,16 @@
 ### Changed
 - Plugin loader BUILD bumped to force fresh phase module loads.
 
+## [2025-12-28e] - 2025-12-28
+### Added
+- Phase 2 Engineering prototype: Power + Heat + Reroute loop, Vent action, overheat lockout, upgrades, logs.
+### Changed
+- Default state schema bumped to 5 with Phase 2 state fields.
+- Plugin loader BUILD bumped for cache-busting.
+
 ## [2025-12-28g] - 2025-12-28
 ### Added
-- Phase 1 Autopilot (AUTOPILOT CORE upgrade + toggle) that auto-purges to hold corruption at 40% using 35% of earned signal.
+- Phase 1 CRT console skin: bulkhead background, phosphor glow, scanlines/vignette/flicker, inset scope/osc windows.
 ### Changed
-- Offline corruption is capped at 95% (no hard-loss while away).
 - Plugin loader BUILD bumped for cache-busting.
+

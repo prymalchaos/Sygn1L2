@@ -104,25 +104,51 @@
 5. Refresh or log in from another browser: milestones do not repeat.
 
 
-## 2025-12-28 (Sydney) – Phase 1 Autopilot (offline-safe corruption control)
+## 2025-12-28 (Sydney) – Phase 2 Engineering prototype (Power + Heat + Reroute)
 **Goal**
-- Prevent players returning to an unavoidable loss after being away.
-- Add an Alien-style AUTOPILOT that spends signal to keep corruption under control.
-
-**Design**
-- Target: hold corruption at **40%**
-- Budget: may spend up to **35% of earned signal** (online budget accrues from earned signal; offline budget is derived from offline gain)
-- Offline safety cap: corruption is clamped to **95%** while offline so players return to a crisis, not a fail screen.
+- Turn Phase 2 from a placeholder into a distinct, modular gameplay loop.
+- Add a new resource (Power) and a new pressure mechanic (Heat) with risk/reward decisions.
 
 **Changes**
-- Added **AUTOPILOT CORE** upgrade (unlocks autopilot and enables it).
-- Added **Autopilot toggle button** in Phase 1 HUD.
-- Implemented autopilot purge logic in both:
-  - live `tick()` and
-  - `applyOfflineProgress()`, with report line when autopilot runs.
-- Added Phase 1 default state fields for autopilot config + budget.
+- Implemented Phase 2 plugin with:
+  - Power generation (PPS), Heat pressure (0–100), and Reroute toggle.
+  - Reroute boosts SPS but drains power and adds heat. Auto-disengages when power hits 0.
+  - Vent action to spend Power to reduce Heat (with cooldown).
+  - Overheat lockout overlay with cooldown.
+  - Upgrade shop: Aux Generator, Thermal Insulation, Reroute Dampers, Pressure Vents.
+  - Comms/Transmission logs + dev tools.
+- Updated Phase 2 default state (schema bumped to 5).
+- Bumped plugin loader BUILD for cache busting.
+
+**Files touched**
+- src/plugins/phase2/plugin.js
+- src/core/state.js
+- src/core/pluginLoader.js
+
+**How to test**
+1. Win Phase 1 and continue to Phase 2 (or use dev tools if available).
+2. Watch Power tick up; use Reroute to boost Signal, observe Power drain + Heat rise.
+3. Use Vent to reduce Heat; confirm cooldown.
+4. Let Heat reach 100% to trigger Overheat lockout overlay.
+
+
+## 2025-12-28 (Sydney) – Phase 1 CRT console skin (Aliens mining vessel aesthetic)
+**Goal**
+- Make Phase 1 feel like a retro CRT terminal on an industrial mining vessel: phosphor green, scanlines, bulkhead, embedded displays.
+
+**Changes**
+- Added phase-local CRT skin:
+  - Bulkhead background (brushed metal/grime gradients)
+  - Phosphor-green text glow
+  - CRT scanlines + vignette + subtle flicker
+  - More tactile button styling + press feedback
+  - Scope/osc areas styled like embedded CRT windows
 
 **Files touched**
 - src/plugins/phase1/plugin.js
-- src/core/state.js
-- src/core/pluginLoader.js
+- src/core/pluginLoader.js (BUILD bump for cache-busting)
+
+**How to test**
+1. Load Phase 1 with a cache buster (e.g. ?v=crt1).
+2. Confirm panels have scanlines/vignette and green phosphor glow.
+3. Confirm buttons feel mechanical and scope/osc look inset.

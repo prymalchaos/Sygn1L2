@@ -43,7 +43,7 @@ async function fetchMyProfile(userId) {
 
 async function saveNow() {
   state.meta.lastSaveAt = Date.now();
-  await saveState(state); // saveState safely no-ops if logged out
+  await saveState(state);
 }
 
 const saveSoon = debounce(() => {
@@ -53,10 +53,8 @@ const saveSoon = debounce(() => {
 function apiFactory() {
   return {
     supabase,
-
     getState: () => clone(state),
     setState: (next) => { state = next; },
-
     getProfile: () => (profile ? { ...profile } : null),
 
     setPhase: async (phaseId) => {
@@ -65,18 +63,11 @@ function apiFactory() {
       await saveNow();
     },
 
-    // Use this for important actions (ping, buy, etc.)
     saveSoon: () => saveSoon(),
     saveNow: async () => { await saveNow(); },
   };
 }
 
-/**
- * Core routing truth:
- * - No session user => onboarding auth step
- * - Session user but no profile => onboarding username step
- * - Session user + profile => phase1 (or keep current non-onboarding phase)
- */
 async function ensureRoutingAfterAuth() {
   const user = await getSessionUser();
 
@@ -106,7 +97,6 @@ function applyOfflineProgressIfAny() {
   const last = state.meta.lastSeenAt || now;
   const dtMs = Math.max(0, now - last);
 
-  // Always update lastSeenAt on boot
   state.meta.lastSeenAt = now;
 
   if (dtMs < 1000) {
@@ -188,7 +178,6 @@ function startTickLoop() {
     if (!activePlugin?.tick) return;
 
     const phaseId = state.phase;
-    // No ticking in onboarding
     if (phaseId === "phase0_onboarding") return;
 
     const api = apiFactory();
@@ -197,7 +186,6 @@ function startTickLoop() {
     try {
       const res = activePlugin.tick({ state: phaseState, dtMs, api });
       if (res?.state) state.phases[phaseId] = res.state;
-      // If plugin signals “important event”, it can call api.saveSoon()
     } catch (e) {
       console.warn("Tick error:", e);
     }
@@ -207,7 +195,6 @@ function startTickLoop() {
 async function start() {
   await loadPlugins();
 
-  // Load save if possible (safe when logged out)
   const saved = await loadSave();
   if (saved) state = saved;
 
@@ -218,20 +205,17 @@ async function start() {
   startAutosaveLoop();
   startTickLoop();
 
-  // Auth state changes
   supabase.auth.onAuthStateChange(async () => {
     await ensureRoutingAfterAuth();
     await saveNow();
   });
 
-  // Initial route
   await ensureRoutingAfterAuth();
 
-  // Apply offline gains if in a playable phase
   if (state.phase !== "phase0_onboarding") {
     applyOfflineProgressIfAny();
     await saveNow();
-    await switchPhase(state.phase); // refresh UI with offline changes
+    await switchPhase(state.phase);
   }
 }
 

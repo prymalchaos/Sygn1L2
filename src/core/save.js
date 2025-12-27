@@ -6,7 +6,6 @@ function isMissingSession(err) {
 }
 
 export async function loadSave() {
-  // If no session, just return null (no save)
   const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
   if (sessErr && !isMissingSession(sessErr)) throw sessErr;
 
@@ -26,7 +25,7 @@ export async function loadSave() {
 export async function saveState(state) {
   const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
   if (sessErr) {
-    if (isMissingSession(sessErr)) return; // silently skip saves when logged out
+    if (isMissingSession(sessErr)) return;
     throw sessErr;
   }
 
@@ -39,10 +38,7 @@ export async function saveState(state) {
     last_seen_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase
-    .from("saves")
-    .upsert(payload, { onConflict: "user_id" });
-
+  const { error } = await supabase.from("saves").upsert(payload, { onConflict: "user_id" });
   if (error) throw error;
 }
 

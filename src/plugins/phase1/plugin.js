@@ -138,6 +138,32 @@ function purgeAmount(p1) {
   return 18 * mult; // percentage points
 }
 
+// "Alien tension" win condition:
+// - Signal ≥ 12,000
+// - Corruption ≤ 40%
+// - Own at least one defensive upgrade (Noise Canceller OR Purge Manifold)
+// - Maintain stability for 10 seconds
+const WIN = {
+  signal: 12000,
+  maxCorruption: 40,
+  holdMs: 10000,
+};
+
+function isDefensiveReady(p1) {
+  const n = p1.upgrades?.noiseCanceller || 0;
+  const p = p1.upgrades?.purgeEfficiency || 0;
+  return n > 0 || p > 0;
+}
+
+function isWinStable(p1) {
+  return (
+    (p1.signal || 0) >= WIN.signal &&
+    (p1.corruption || 0) <= WIN.maxCorruption &&
+    isDefensiveReady(p1) &&
+    !p1.isDefeated
+  );
+}
+
 export default {
   id: "phase1",
 
@@ -145,18 +171,26 @@ export default {
     const profile = api.getProfile();
     const isDev = profile?.username === "PrymalChaos" || profile?.role === "admin";
 
-    // Backfill state for older saves (no migration system needed yet)
+    // Backfill state for older saves
     const stInit = api.getState();
-    const p1 = stInit.phases.phase1 ??= {};
+    const p1 = (stInit.phases.phase1 ??= {});
+    stInit.meta.unlockedPhases ??= { phase1: true, phase2: false };
+
     p1.signal ??= 0;
     p1.signalPerSecond ??= 1;
     p1.pingPower ??= 5;
+
     p1.corruption ??= 0;
     p1.baseCorruptionRate ??= 0.18;
     p1.isDefeated ??= false;
+
+    p1.completed ??= false;
+    p1.winHoldMs ??= 0;
+
     p1.comms ??= [];
     p1.transmission ??= [];
     p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+
     api.setState(stInit);
 
     if (p1.comms.length === 0) {
@@ -166,7 +200,7 @@ export default {
       api.saveSoon();
     }
 
-    // Panel-heavy “ship console” UI, phase-local styling
+    // Panel-heavy UI, phase-local styling
     root.innerHTML = `
       <style>
         .p1-grid { display: grid; gap: 12px; }
@@ -279,7 +313,7 @@ export default {
                 <div class="p1-label">Ping Power</div>
                 <div id="pingPower" class="p1-value">0</div>
               </div>
-              <div class="p1-stat" style="min-width:220px;">
+              <div class="p1-stat" style="min-width:260px;">
                 <div class="p1-label">Corruption</div>
                 <div style="display:flex; align-items:center; gap:10px;">
                   <div class="p1-bar" style="flex:1;"><div id="corrFill" class="p1-fill"></div></div>
@@ -335,6 +369,7 @@ export default {
               <button id="wipe" class="p1-btn">Wipe my save</button>
               <button id="grant" class="p1-btn">+1,000 signal</button>
               <button id="grantBig" class="p1-btn">+50,000 signal</button>
+              <button id="goP2" class="p1-btn">Go Phase 2</button>
             </div>
             <div id="devMsg" style="margin-top:10px; font-size:12px; opacity:0.9;"></div>
           </div>
@@ -355,6 +390,17 @@ export default {
             </div>
           </div>
 
+          <div id="winOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.94); padding:14px;">
+            <div class="p1-panel p1-scan" style="max-width:760px; margin: 0 auto;">
+              <div class="p1-title">STABILISATION ACHIEVED</div>
+              <div id="winBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
+              <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+                <button id="continue" class="p1-btn" style="flex:1; min-width:180px;">CONTINUE TO PHASE 2</button>
+                <button id="stay" class="p1-btn" style="flex:1; min-width:180px;">STAY IN PHASE 1</button>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     `;
@@ -370,6 +416,11 @@ export default {
     const $scope = root.querySelector("#scope");
     const $osc = root.querySelector("#osc");
     const $hint = root.querySelector("#hint");
+
+    const winOverlay = root.querySelector("#winOverlay");
+    const winBody = root.querySelector("#winBody");
+    const continueBtn = root.querySelector("#continue");
+    const stayBtn = root.querySelector("#stay");
 
     root.querySelector("#logout").onclick = async () => {
       await api.supabase.auth.signOut();
@@ -458,7 +509,6 @@ export default {
     function doPurge() {
       const st = api.getState();
       const p1 = st.phases.phase1;
-
       if (p1.isDefeated) return;
 
       const cost = purgeCost(p1);
@@ -491,7 +541,7 @@ export default {
 
     root.querySelector("#purge").onclick = () => doPurge();
 
-    // Dev tools (no admin functions)
+    // Dev tools
     if (isDev) {
       const devMsg = root.querySelector("#devMsg");
       const setDevMsg = (t) => { devMsg.textContent = t || ""; };
@@ -520,6 +570,15 @@ export default {
         api.saveSoon();
         setDevMsg("+50,000 signal.");
         render();
+      };
+
+      root.querySelector("#goP2").onclick = async () => {
+        const st = api.getState();
+        st.meta.unlockedPhases ??= { phase1: true, phase2: false };
+        st.meta.unlockedPhases.phase2 = true;
+        api.setState(st);
+        api.saveSoon();
+        await api.setPhase("phase2");
       };
     }
 
@@ -558,6 +617,8 @@ export default {
       p1.signal = 0;
       p1.signalPerSecond = 1;
       p1.pingPower = 5;
+      p1.winHoldMs = 0;
+      p1.completed = false;
       p1.upgrades = { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
       p1.comms = [];
       p1.transmission = [];
@@ -570,11 +631,33 @@ export default {
       render();
     };
 
+    continueBtn.onclick = async () => {
+      const st = api.getState();
+      if (!st?.meta?.unlockedPhases?.phase2) return;
+      winOverlay.style.display = "none";
+      await api.setPhase("phase2");
+    };
+    stayBtn.onclick = () => { winOverlay.style.display = "none"; };
+
     function maybeWarn(p1) {
       const c = p1.corruption || 0;
       if (c >= 25 && !p1._warn25) { p1._warn25 = true; pushLog(p1.comms, "CONTROL//WARN  Corruption rising. Consider Noise Canceller."); }
       if (c >= 50 && !p1._warn50) { p1._warn50 = true; pushLog(p1.comms, "CONTROL//WARN  Integrity degraded. Purge recommended."); }
       if (c >= 75 && !p1._warn75) { p1._warn75 = true; pushLog(p1.comms, "CONTROL//ALERT  Critical corruption. Immediate action required."); }
+    }
+
+    function winProgressText(p1) {
+      const stable = isWinStable(p1);
+      const remaining = Math.max(0, WIN.holdMs - (p1.winHoldMs || 0));
+      if (p1.completed) return "Phase stabilised.";
+      if (!stable) {
+        const missing = [];
+        if ((p1.signal || 0) < WIN.signal) missing.push(`Signal ≥ ${nfmt(WIN.signal)}`);
+        if ((p1.corruption || 0) > WIN.maxCorruption) missing.push(`Corruption ≤ ${WIN.maxCorruption}%`);
+        if (!isDefensiveReady(p1)) missing.push("Install a defensive system (Noise Canceller or Purge Manifold)");
+        return `Stabilisation criteria: ${missing.join(" • ")}`;
+      }
+      return `Stabilising… hold for ${Math.ceil(remaining / 1000)}s`;
     }
 
     function render() {
@@ -593,20 +676,19 @@ export default {
       const purgeC = purgeCost(p1);
       const purgeA = purgeAmount(p1);
 
-      $hint.textContent = `Corruption rate: ${rate.toFixed(2)}/s • Purge: -${Math.floor(purgeA)}% for ${nfmt(purgeC)} signal`;
+      $hint.textContent = `Corruption rate: ${rate.toFixed(2)}/s • Purge: -${Math.floor(purgeA)}% for ${nfmt(purgeC)} signal • ${winProgressText(p1)}`;
 
       renderShop();
 
       $comms.textContent = (p1.comms || []).join("\n");
       $tx.textContent = (p1.transmission || []).join("\n");
 
-      // Tiny “scope” toys (purely visual)
+      // Scope toys (purely visual)
       const ph = (Date.now() / 500) % (Math.PI * 2);
       const amp = clamp((p1.signalPerSecond || 1) / 20, 0.15, 1.0);
       $scope.textContent = renderWave(64, 8, ph, amp);
       $osc.textContent = renderWave(24, 8, ph * 1.4, amp * 0.9);
 
-      // Defeat overlay
       if (p1.isDefeated) {
         defeatBody.innerHTML = `
           <div style="opacity:0.9;">
@@ -618,17 +700,29 @@ export default {
           </div>
         `;
         defeatOverlay.style.display = "block";
+      } else {
+        defeatOverlay.style.display = "none";
+      }
+
+      if (p1.completed && st.meta?.unlockedPhases?.phase2) {
+        winBody.innerHTML = `
+          <div style="opacity:0.92;">
+            Signal held at <b>${nfmt(WIN.signal)}</b> while corruption stayed under <b>${WIN.maxCorruption}%</b>.
+          </div>
+          <div style="margin-top:8px; opacity:0.85; font-size:13px;">
+            CONTROL//RETURN  “You did it. The ship’s quiet. For now.”
+          </div>
+        `;
+        winOverlay.style.display = "block";
       }
     }
 
-    // Initial render
     render();
 
-    // Repaint loop (battery-friendly)
     const repaint = setInterval(() => {
-      render();
       const st = api.getState();
       maybeWarn(st.phases.phase1);
+      render();
     }, 500);
 
     this._cleanup = () => clearInterval(repaint);
@@ -651,13 +745,32 @@ export default {
 
     if (state.corruption >= 100) {
       state.isDefeated = true;
+      state.winHoldMs = 0;
+      return { state };
+    }
+
+    // Win stability timer
+    if (!state.completed) {
+      if (isWinStable(state)) {
+        state.winHoldMs = (state.winHoldMs || 0) + dtMs;
+        if (state.winHoldMs >= WIN.holdMs) {
+          state.completed = true;
+          state.winHoldMs = WIN.holdMs;
+
+          // Unlock Phase 2
+          // (Phase-local choice, stored in core meta)
+          // eslint-disable-next-line no-underscore-dangle
+          state._justWon = true;
+        }
+      } else {
+        state.winHoldMs = 0;
+      }
     }
 
     return { state };
   },
 
   applyOfflineProgress({ state, dtMs }) {
-    // If offline for almost nothing, skip
     if (dtMs < 1000) return { state, summary: [] };
 
     if (state.isDefeated) {
@@ -680,11 +793,13 @@ export default {
     const rate = computeCorruptionRate(state);
     state.corruption = clamp(beforeCorr + rate * (dtMs / 1000), 0, 100);
 
-    let defeated = false;
     if (state.corruption >= 100) {
       state.isDefeated = true;
-      defeated = true;
+      state.winHoldMs = 0;
     }
+
+    // Don't award "hold time" offline (prevents accidental wins during tab sleep)
+    state.winHoldMs = 0;
 
     const summary = [
       `Offline for ${fmtMs(dtMs)}`,
@@ -692,8 +807,26 @@ export default {
       `Corruption: ${Math.floor(beforeCorr)}% → ${Math.floor(state.corruption)}%`,
     ];
 
-    if (defeated) summary.push(`SYSTEM FAILURE occurred while offline.`);
+    if (state.isDefeated) summary.push(`SYSTEM FAILURE occurred while offline.`);
+    else summary.push(`Stabilisation timer resets while offline.`);
 
     return { state, summary };
+  },
+
+  // Hook called by core? If not present, we do unlock in mount via backfill logic.
+  onAfterTick({ globalState }) {
+    // Some cores call plugin hooks; if yours doesn't, this is harmless.
+    // We use it to transfer a one-tick win flag into global meta + logs.
+    const p1 = globalState?.phases?.phase1;
+    if (p1?._justWon) {
+      p1._justWon = false;
+
+      globalState.meta.unlockedPhases ??= { phase1: true, phase2: false };
+      globalState.meta.unlockedPhases.phase2 = true;
+
+      pushLog(p1.comms, "CONTROL//RETURN  Stabilisation achieved. Phase 2 unlocked.");
+      pushLog(p1.transmission, "LOCK//UNSEALED  PHASE_02");
+    }
+    return { globalState };
   },
 };

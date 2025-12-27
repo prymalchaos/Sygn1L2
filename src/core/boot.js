@@ -10,34 +10,34 @@ let state = createDefaultState();
 let mountEl;
 let activePluginId = null;
 let activePlugin = null;
-
-let profile = null; // { id, username, role }
+let profile = null;
 let autosaveTimer = null;
+
+function isMissingSession(err) {
+  const msg = (err?.message || String(err || "")).toLowerCase();
+  return msg.includes("auth session missing");
+}
 
 function apiFactory() {
   return {
     supabase,
-
     getState: () => clone(state),
     setState: (next) => { state = next; },
-
     getProfile: () => (profile ? { ...profile } : null),
-
     setPhase: async (phaseId) => {
       state.phase = phaseId;
       await switchPhase(phaseId);
       await saveNow();
     },
-
-    saveNow: async () => {
-      await saveNow();
-    },
+    saveNow: async () => { await saveNow(); },
   };
 }
 
 async function fetchMyProfile() {
-  const { data: { user }, error: userErr } = await supabase.auth.getUser();
-  if (userErr) throw userErr;
+  const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
+  if (sessErr && !isMissingSession(sessErr)) throw sessErr;
+
+  const user = sessionData?.session?.user;
   if (!user) return null;
 
   const { data, error } = await supabase
@@ -54,14 +54,14 @@ async function ensureRoutingAfterAuth() {
   profile = await fetchMyProfile();
 
   if (!profile) {
-    // Logged in but no profile yet
+    // Logged in but no profile yet OR not logged in -> onboarding
     state.phase = "phase0_onboarding";
-    state.phases.phase0_onboarding.step = "username";
+    state.phases.phase0_onboarding.step = "auth";
     await switchPhase("phase0_onboarding");
     return;
   }
 
-  // Has profile. If still in onboarding, move to phase1.
+  // Has profile: proceed
   if (state.phase === "phase0_onboarding") state.phase = "phase1";
   await switchPhase(state.phase);
 }
@@ -95,6 +95,7 @@ function applyOfflineProgressIfAny() {
 }
 
 async function saveNow() {
+  // saveState already gracefully skips if logged out
   state.meta.lastSaveAt = Date.now();
   await saveState(state);
 }
@@ -112,7 +113,6 @@ async function switchPhase(id) {
   activePluginId = id;
   activePlugin = getPlugin(id);
 
-  // Ensure phase state exists
   if (activePlugin?.getInitialState && state.phases[id] == null) {
     state.phases[id] = activePlugin.getInitialState();
   } else {
@@ -145,6 +145,7 @@ function startAutosaveLoop() {
 async function start() {
   await loadPlugins();
 
+  // Load save if possible (safe even when logged out)
   const saved = await loadSave();
   if (saved) state = saved;
 
@@ -154,7 +155,7 @@ async function start() {
   installSaveTriggers();
   startAutosaveLoop();
 
-  // Auth state changes (login/logout)
+  // React to auth state changes
   supabase.auth.onAuthStateChange(async (_event, session) => {
     if (!session?.user) {
       profile = null;
@@ -164,28 +165,25 @@ async function start() {
       return;
     }
 
-    // Logged in
     await ensureRoutingAfterAuth();
     await saveNow();
   });
 
-  // Initial route based on current session
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
+  // Initial session check (do NOT crash if missing)
+  const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
+  if (sessErr && !isMissingSession(sessErr)) throw sessErr;
+
+  if (!sessionData?.session?.user) {
     profile = null;
     state.phase = "phase0_onboarding";
     await switchPhase("phase0_onboarding");
     return;
   }
 
-  // Logged in
+  // Logged in: route and apply offline
   await ensureRoutingAfterAuth();
-
-  // Apply offline gains after plugin is ready
   applyOfflineProgressIfAny();
   await saveNow();
-
-  // Re-mount current phase to reflect offline changes
   await switchPhase(state.phase);
 }
 

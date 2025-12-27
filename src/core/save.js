@@ -1,8 +1,16 @@
 import { supabase } from "./supabaseClient.js";
 
+function isMissingSession(err) {
+  const msg = (err?.message || String(err || "")).toLowerCase();
+  return msg.includes("auth session missing");
+}
+
 export async function loadSave() {
-  const { data: { user }, error: userErr } = await supabase.auth.getUser();
-  if (userErr) throw userErr;
+  // If no session, just return null (no save)
+  const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
+  if (sessErr && !isMissingSession(sessErr)) throw sessErr;
+
+  const user = sessionData?.session?.user;
   if (!user) return null;
 
   const { data, error } = await supabase
@@ -16,8 +24,13 @@ export async function loadSave() {
 }
 
 export async function saveState(state) {
-  const { data: { user }, error: userErr } = await supabase.auth.getUser();
-  if (userErr) throw userErr;
+  const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
+  if (sessErr) {
+    if (isMissingSession(sessErr)) return; // silently skip saves when logged out
+    throw sessErr;
+  }
+
+  const user = sessionData?.session?.user;
   if (!user) return;
 
   const payload = {

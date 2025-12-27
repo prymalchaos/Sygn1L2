@@ -16,36 +16,68 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;");
 }
 
-async function callFunction(api, name, payload) {
-  const { data, error } = await api.supabase.functions.invoke(name, {
-    body: payload || {},
-  });
-
-  if (!error) return data;
-
-  // Best effort extraction of useful details
-  const status =
-    error?.context?.status ||
-    error?.status ||
-    "unknown";
-
-  let details = "";
-  try {
-    // Supabase sometimes puts response text/json here:
-    const ctx = error?.context;
-    if (ctx?.body) {
-      if (typeof ctx.body === "string") details = ctx.body;
-      else details = JSON.stringify(ctx.body);
-    } else if (ctx?.response) {
-      details = await ctx.response.text();
-    }
-  } catch (_) {
-    // ignore
-  }
-
-  const msg = error?.message || `Function ${name} failed`;
-  throw new Error(`${msg} (status ${status})${details ? `: ${details}` : ""}`);
+function nfmt(n) {
+  const x = Math.floor(Number(n) || 0);
+  return x.toLocaleString();
 }
+
+function costFor(base, growth, lvl) {
+  return Math.floor(base * Math.pow(growth, lvl));
+}
+
+// Phase 1 upgrades live entirely inside the phase plugin (modular by design)
+const UPGRADE_DEFS = [
+  {
+    id: "spsBoost",
+    name: "Signal Booster Coil",
+    desc: "Increase Signal/sec.",
+    base: 25,
+    growth: 1.55,
+    effectText: (lvl) => `+${(lvl + 1) * 1} SPS`,
+    apply: (p1, nextLvl) => {
+      // Each level adds +1 SPS (simple, readable baseline)
+      p1.signalPerSecond += 1;
+      p1.upgrades.spsBoost = nextLvl;
+    },
+  },
+  {
+    id: "pingBoost",
+    name: "Ping Amplifier",
+    desc: "Increase Ping power.",
+    base: 40,
+    growth: 1.60,
+    effectText: (lvl) => `+${(lvl + 1) * 2} Ping`,
+    apply: (p1, nextLvl) => {
+      // Each level adds +2 Ping Power
+      p1.pingPower += 2;
+      p1.upgrades.pingBoost = nextLvl;
+    },
+  },
+  {
+    id: "spsMult",
+    name: "Resonance Stabiliser",
+    desc: "Multiply Signal/sec.",
+    base: 120,
+    growth: 1.85,
+    effectText: (lvl) => `x${(1 + (lvl + 1) * 0.10).toFixed(2)} SPS`,
+    apply: (p1, nextLvl) => {
+      // Apply multiplicative upgrade by recalculating from a derived base:
+      // We store base SPS separately so we can apply multipliers cleanly.
+      p1._baseSps ??= p1.signalPerSecond;
+
+      // Remove previous multiplier, then apply new one
+      const prevMult = 1 + (p1.upgrades.spsMult || 0) * 0.10;
+      const nextMult = 1 + nextLvl * 0.10;
+
+      const baseSps = p1._baseSps / prevMult;
+      p1._baseSps = baseSps * nextMult;
+      p1.signalPerSecond = p1._baseSps;
+
+      p1.upgrades.spsMult = nextLvl;
+    },
+  },
+];
+
 export default {
   id: "phase1",
 
@@ -53,8 +85,14 @@ export default {
     const profile = api.getProfile();
     const isDev = profile?.username === "PrymalChaos" || profile?.role === "admin";
 
+    // Make sure phase1 state has new fields even if loading an old save
+    const stInit = api.getState();
+    stInit.phases.phase1.pingPower ??= 5;
+    stInit.phases.phase1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0 };
+    api.setState(stInit);
+
     root.innerHTML = `
-      <div style="max-width: 760px; margin: 0 auto; padding: 14px;">
+      <div style="max-width: 820px; margin: 0 auto; padding: 14px;">
         <div style="border:1px solid rgba(215,255,224,0.18); border-radius:12px; padding:14px; background: rgba(10,14,18,0.7); position:relative;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
             <div>
@@ -71,52 +109,47 @@ export default {
 
           <hr style="border:0; border-top:1px solid rgba(215,255,224,0.12); margin:14px 0;">
 
-          <div style="display:grid; gap:10px;">
-            <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+          <div style="display:grid; gap:12px;">
+            <div style="display:flex; gap:12px; align-items:flex-end; justify-content:space-between; flex-wrap:wrap;">
               <div>
                 <div style="opacity:0.85; font-size:13px;">Signal</div>
-                <div id="signal" style="font-size:28px; font-weight:800;">0</div>
+                <div id="signal" style="font-size:30px; font-weight:900;">0</div>
               </div>
+
               <div style="text-align:right;">
                 <div style="opacity:0.85; font-size:13px;">Signal / sec</div>
-                <div id="sps" style="font-size:18px; font-weight:700;">0</div>
+                <div id="sps" style="font-size:18px; font-weight:800;">0</div>
+              </div>
+
+              <div style="text-align:right;">
+                <div style="opacity:0.85; font-size:13px;">Ping Power</div>
+                <div id="pingPower" style="font-size:18px; font-weight:800;">0</div>
               </div>
             </div>
 
             <div style="display:flex; gap:10px;">
               <button id="ping" style="flex:1; padding:12px; border-radius:10px;">Ping</button>
-              <button id="boost" style="flex:1; padding:12px; border-radius:10px;">+0.5 SPS</button>
+            </div>
+
+            <div style="border-top:1px solid rgba(215,255,224,0.12); padding-top:12px;">
+              <div style="font-weight:900; letter-spacing:0.06em;">UPGRADES</div>
+              <div style="opacity:0.8; font-size:13px; margin-top:6px;">
+                Buy upgrades to increase passive generation and improve Ping efficiency.
+              </div>
+              <div id="shop" style="margin-top:10px; display:grid; gap:10px;"></div>
             </div>
           </div>
 
           <div id="devPanel" style="display:${isDev ? "block" : "none"}; margin-top:16px;">
             <hr style="border:0; border-top:1px solid rgba(215,255,224,0.12); margin:14px 0;">
-            <div style="font-weight:800; letter-spacing:0.06em;">DEV PANEL</div>
+            <div style="font-weight:900; letter-spacing:0.06em;">DEV PANEL</div>
 
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
               <button id="wipe" style="padding:10px; border-radius:10px;">Wipe my save</button>
-              <button id="grant" style="padding:10px; border-radius:10px;">+1000 signal</button>
+              <button id="grant" style="padding:10px; border-radius:10px;">+1,000 signal</button>
+              <button id="grantBig" style="padding:10px; border-radius:10px;">+50,000 signal</button>
               <button id="phase0" style="padding:10px; border-radius:10px;">Go phase 0</button>
               <button id="phase1" style="padding:10px; border-radius:10px;">Go phase 1</button>
-            </div>
-
-            <div style="margin-top:12px; border-top:1px solid rgba(215,255,224,0.12); padding-top:12px;">
-              <div style="font-weight:800; letter-spacing:0.06em; opacity:0.95;">ADMIN TOOLS</div>
-              <div style="opacity:0.85; font-size:13px; margin-top:6px;">
-                Requires Edge Functions: <code>admin-users</code>, <code>admin-user-delete</code>.
-              </div>
-
-              <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-                <button id="listUsers" style="padding:10px; border-radius:10px;">List users</button>
-                <button id="deleteTarget" style="padding:10px; border-radius:10px;">Delete user (user id)</button>
-              </div>
-
-              <div style="margin-top:10px; display:grid; gap:8px;">
-                <input id="targetUserId" placeholder="Target user_id (uuid)"
-                  style="padding:10px; border-radius:10px; border:1px solid rgba(215,255,224,0.2); background:#05070a; color:#d7ffe0;">
-              </div>
-
-              <div id="adminOut" style="margin-top:10px; font-size:13px; opacity:0.95; white-space:pre-wrap;"></div>
             </div>
 
             <div id="devMsg" style="margin-top:10px; font-size:13px; opacity:0.9;"></div>
@@ -124,7 +157,7 @@ export default {
 
           <div id="offlineOverlay" style="display:none; position:absolute; inset:0; border-radius:12px; background: rgba(5,7,10,0.92); padding:14px;">
             <div style="border:1px solid rgba(215,255,224,0.18); border-radius:12px; padding:14px; background: rgba(10,14,18,0.85);">
-              <div style="font-weight:800; letter-spacing:0.06em;">RETURN REPORT</div>
+              <div style="font-weight:900; letter-spacing:0.06em;">RETURN REPORT</div>
               <div id="offlineBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
               <button id="offlineAck" style="margin-top:12px; padding:10px; border-radius:10px; width:100%;">ACK</button>
             </div>
@@ -136,29 +169,85 @@ export default {
 
     const $signal = root.querySelector("#signal");
     const $sps = root.querySelector("#sps");
+    const $pingPower = root.querySelector("#pingPower");
+    const $shop = root.querySelector("#shop");
 
     root.querySelector("#logout").onclick = async () => {
       await api.supabase.auth.signOut();
     };
 
-    const pingBtn = root.querySelector("#ping");
-    const boostBtn = root.querySelector("#boost");
-
-    pingBtn.onclick = () => {
+    root.querySelector("#ping").onclick = () => {
       const st = api.getState();
-      st.phases.phase1.signal += 5;
+      const p1 = st.phases.phase1;
+      p1.signal += p1.pingPower || 5;
       api.setState(st);
       api.saveSoon();
       render();
     };
 
-    boostBtn.onclick = () => {
+    function buy(upgradeId) {
       const st = api.getState();
-      st.phases.phase1.signalPerSecond = +(st.phases.phase1.signalPerSecond + 0.5).toFixed(2);
+      const p1 = st.phases.phase1;
+      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0 };
+
+      const def = UPGRADE_DEFS.find((u) => u.id === upgradeId);
+      if (!def) return;
+
+      const lvl = p1.upgrades[upgradeId] || 0;
+      const nextLvl = lvl + 1;
+      const cost = costFor(def.base, def.growth, lvl);
+
+      if ((p1.signal || 0) < cost) return;
+
+      p1.signal -= cost;
+      def.apply(p1, nextLvl);
+
       api.setState(st);
       api.saveSoon();
       render();
-    };
+    }
+
+    function renderShop() {
+      const st = api.getState();
+      const p1 = st.phases.phase1;
+      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0 };
+
+      $shop.innerHTML = "";
+
+      for (const def of UPGRADE_DEFS) {
+        const lvl = p1.upgrades[def.id] || 0;
+        const cost = costFor(def.base, def.growth, lvl);
+        const canBuy = (p1.signal || 0) >= cost;
+
+        const row = document.createElement("div");
+        row.style.border = "1px solid rgba(215,255,224,0.12)";
+        row.style.borderRadius = "12px";
+        row.style.padding = "12px";
+        row.style.background = "rgba(5,7,10,0.35)";
+        row.innerHTML = `
+          <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+            <div style="min-width: 220px;">
+              <div style="font-weight:900; letter-spacing:0.03em;">${escapeHtml(def.name)}</div>
+              <div style="opacity:0.8; font-size:13px; margin-top:4px;">${escapeHtml(def.desc)}</div>
+              <div style="opacity:0.9; font-size:13px; margin-top:6px;">
+                Level <b>${lvl}</b> → ${escapeHtml(def.effectText(lvl))}
+              </div>
+            </div>
+
+            <div style="text-align:right;">
+              <div style="opacity:0.75; font-size:13px;">Cost</div>
+              <div style="font-weight:900; font-size:18px;">${nfmt(cost)}</div>
+              <button data-buy="${def.id}" ${canBuy ? "" : "disabled"}
+                style="margin-top:6px; padding:10px; border-radius:10px; ${canBuy ? "" : "opacity:0.5;"}">
+                Buy
+              </button>
+            </div>
+          </div>
+        `;
+        row.querySelector(`[data-buy="${def.id}"]`).onclick = () => buy(def.id);
+        $shop.appendChild(row);
+      }
+    }
 
     // Offline overlay (ACK)
     const overlay = root.querySelector("#offlineOverlay");
@@ -181,14 +270,10 @@ export default {
       };
     }
 
-    // Dev/Admin tools
+    // Dev tools (kept lightweight, no admin edge functions)
     if (isDev) {
       const devMsg = root.querySelector("#devMsg");
-      const adminOut = root.querySelector("#adminOut");
-      const targetUserIdEl = root.querySelector("#targetUserId");
-
       const setDevMsg = (t) => { devMsg.textContent = t || ""; };
-      const setAdminOut = (t) => { adminOut.textContent = t || ""; };
 
       root.querySelector("#wipe").onclick = async () => {
         setDevMsg("Wiping…");
@@ -203,7 +288,16 @@ export default {
         st.phases.phase1.signal += 1000;
         api.setState(st);
         api.saveSoon();
-        setDevMsg("Granted +1000 signal.");
+        setDevMsg("+1,000 signal.");
+        render();
+      };
+
+      root.querySelector("#grantBig").onclick = () => {
+        const st = api.getState();
+        st.phases.phase1.signal += 50_000;
+        api.setState(st);
+        api.saveSoon();
+        setDevMsg("+50,000 signal.");
         render();
       };
 
@@ -213,48 +307,21 @@ export default {
       root.querySelector("#phase1").onclick = async () => {
         await api.setPhase("phase1");
       };
-
-      root.querySelector("#listUsers").onclick = async () => {
-        setAdminOut("Calling admin-users…");
-        try {
-          const res = await callFunction(api, "admin-users", {});
-          const lines = (res?.users || []).map((u) => `${u.id}  ${u.email || ""}`);
-          setAdminOut(lines.join("\n") || "(no users returned)");
-        } catch (e) {
-          setAdminOut(`Error: ${e?.message || e}`);
-        }
-      };
-
-      root.querySelector("#deleteTarget").onclick = async () => {
-        const user_id = targetUserIdEl.value.trim();
-        if (!user_id) { setAdminOut("Enter a target user_id first."); return; }
-
-        if (!confirm(`Delete user ${user_id}? This cannot be undone.`)) return;
-
-        setAdminOut("Calling admin-user-delete…");
-        try {
-          const res = await callFunction(api, "admin-user-delete", { user_id });
-          setAdminOut(`Deleted: ${res?.deleted || user_id}`);
-        } catch (e) {
-          setAdminOut(`Error: ${e?.message || e}`);
-        }
-      };
     }
 
     function render() {
       const st = api.getState();
       const p1 = st.phases.phase1;
-      $signal.textContent = Math.floor(p1.signal).toString();
-      $sps.textContent = p1.signalPerSecond.toString();
+      $signal.textContent = nfmt(p1.signal);
+      $sps.textContent = (p1.signalPerSecond || 0).toFixed(2);
+      $pingPower.textContent = nfmt(p1.pingPower || 5);
+      renderShop();
     }
 
-    // Battery-friendly repaint loop
     render();
-    const repaintTimer = setInterval(render, 250);
+    const repaintTimer = setInterval(render, 500); // shop refresh isn't urgent
 
-    this._cleanup = () => {
-      clearInterval(repaintTimer);
-    };
+    this._cleanup = () => clearInterval(repaintTimer);
   },
 
   unmount() {

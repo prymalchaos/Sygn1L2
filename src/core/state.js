@@ -2,7 +2,7 @@ export function createDefaultState() {
   const now = Date.now();
   return {
     meta: {
-      schema: 4,
+      schema: 5,
       lastSeenAt: now,
       lastSaveAt: 0,
       offlineSummary: [],
@@ -52,9 +52,36 @@ export function createDefaultState() {
         },
       },
 
-      // Phase 2 is intentionally a stub plugin right now.
+      // Phase 2: Engineering Bay prototype (Power + Heat + Reroute)
       phase2: {
         bootedAt: now,
+
+        signal: 0,
+        signalPerSecond: 0.5,
+
+        power: 0,
+        powerPerSecond: 1.0,
+
+        heat: 0,                 // 0..100 (overheat pressure)
+        heatRateBase: 0.10,      // per second baseline
+        isOverheated: false,
+
+        reroute: {
+          active: false,
+          powerDrainPerSec: 2.2,
+          spsMultiplier: 2.0,
+          heatAddPerSec: 0.75,
+        },
+
+        upgrades: {
+          generator: 0,          // +power/sec
+          insulation: 0,         // reduces heat rate
+          rerouteEfficiency: 0,  // lowers drain / heat add
+          venting: 0,            // stronger vent
+        },
+
+        comms: [],
+        transmission: [],
       },
     },
   };

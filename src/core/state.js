@@ -2,11 +2,17 @@ export function createDefaultState() {
   const now = Date.now();
   return {
     meta: {
-      schema: 3,
+      schema: 4,
       lastSeenAt: now,
       lastSaveAt: 0,
       offlineSummary: [],
       offlineNeedsAck: false,
+
+      // Phase unlocks (kept core-agnostic; phases decide what to unlock)
+      unlockedPhases: {
+        phase1: true,
+        phase2: false,
+      },
     },
     phase: "phase0_onboarding",
     phases: {
@@ -20,9 +26,13 @@ export function createDefaultState() {
         pingPower: 5,
 
         // Pressure mechanic
-        corruption: 0,           // 0..100
+        corruption: 0,            // 0..100
         baseCorruptionRate: 0.18, // per second baseline
         isDefeated: false,
+
+        // Win state
+        completed: false,
+        winHoldMs: 0,
 
         // Logs (kept small)
         comms: [],
@@ -36,6 +46,11 @@ export function createDefaultState() {
           noiseCanceller: 0,
           purgeEfficiency: 0,
         },
+      },
+
+      // Phase 2 is intentionally a stub plugin right now.
+      phase2: {
+        bootedAt: now,
       },
     },
   };

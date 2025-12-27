@@ -33,35 +33,50 @@ function apiFactory() {
   };
 }
 
-async function fetchMyProfile() {
+async function getSessionUser() {
   const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
   if (sessErr && !isMissingSession(sessErr)) throw sessErr;
+  return sessionData?.session?.user ?? null;
+}
 
-  const user = sessionData?.session?.user;
-  if (!user) return null;
-
+async function fetchMyProfile(userId) {
   const { data, error } = await supabase
     .from("profiles")
     .select("id, username, role")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   if (error) throw error;
   return data ?? null;
 }
 
+/**
+ * Core routing truth:
+ * - No session user => onboarding auth step
+ * - Session user but no profile => onboarding username step
+ * - Session user + profile => phase1 (or keep current non-onboarding phase)
+ */
 async function ensureRoutingAfterAuth() {
-  profile = await fetchMyProfile();
+  const user = await getSessionUser();
 
-  if (!profile) {
-    // Logged in but no profile yet OR not logged in -> onboarding
+  if (!user) {
+    profile = null;
     state.phase = "phase0_onboarding";
     state.phases.phase0_onboarding.step = "auth";
     await switchPhase("phase0_onboarding");
     return;
   }
 
-  // Has profile: proceed
+  profile = await fetchMyProfile(user.id);
+
+  if (!profile) {
+    state.phase = "phase0_onboarding";
+    state.phases.phase0_onboarding.step = "username";
+    await switchPhase("phase0_onboarding");
+    return;
+  }
+
+  // Has profile
   if (state.phase === "phase0_onboarding") state.phase = "phase1";
   await switchPhase(state.phase);
 }
@@ -95,9 +110,8 @@ function applyOfflineProgressIfAny() {
 }
 
 async function saveNow() {
-  // saveState already gracefully skips if logged out
   state.meta.lastSaveAt = Date.now();
-  await saveState(state);
+  await saveState(state); // saveState safely no-ops if logged out
 }
 
 async function switchPhase(id) {
@@ -145,8 +159,7 @@ function startAutosaveLoop() {
 async function start() {
   await loadPlugins();
 
-  // Load save if possible (safe even when logged out)
-  const saved = await loadSave();
+  const saved = await loadSave(); // safe even when logged out
   if (saved) state = saved;
 
   const app = document.getElementById("app");
@@ -155,36 +168,21 @@ async function start() {
   installSaveTriggers();
   startAutosaveLoop();
 
-  // React to auth state changes
-  supabase.auth.onAuthStateChange(async (_event, session) => {
-    if (!session?.user) {
-      profile = null;
-      state = createDefaultState();
-      state.phase = "phase0_onboarding";
-      await switchPhase("phase0_onboarding");
-      return;
-    }
-
+  // Auth state changes (login/logout)
+  supabase.auth.onAuthStateChange(async (_event, _session) => {
     await ensureRoutingAfterAuth();
     await saveNow();
   });
 
-  // Initial session check (do NOT crash if missing)
-  const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
-  if (sessErr && !isMissingSession(sessErr)) throw sessErr;
-
-  if (!sessionData?.session?.user) {
-    profile = null;
-    state.phase = "phase0_onboarding";
-    await switchPhase("phase0_onboarding");
-    return;
-  }
-
-  // Logged in: route and apply offline
+  // Initial route
   await ensureRoutingAfterAuth();
-  applyOfflineProgressIfAny();
-  await saveNow();
-  await switchPhase(state.phase);
+
+  // If we landed into a non-onboarding phase, apply offline gains
+  if (state.phase !== "phase0_onboarding") {
+    applyOfflineProgressIfAny();
+    await saveNow();
+    await switchPhase(state.phase); // refresh UI with offline changes
+  }
 }
 
 start().catch((e) => {

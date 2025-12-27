@@ -19,6 +19,9 @@ let autosaveTimer = null;
 let tickTimer = null;
 let lastTickAt = Date.now();
 
+// Tracks which user the in-memory state belongs to, so we don't overwrite cloud saves on login.
+let lastAuthUserId = null;
+
 function isMissingSession(err) {
   const msg = (err?.message || String(err || "")).toLowerCase();
   return msg.includes("auth session missing");
@@ -195,6 +198,10 @@ function startTickLoop() {
 async function start() {
   await loadPlugins();
 
+  // Capture current auth user (if any) so we know who state belongs to.
+  const bootUser = await getSessionUser();
+  lastAuthUserId = bootUser?.id ?? null;
+
   const saved = await loadSave();
   if (saved) state = saved;
 
@@ -205,8 +212,32 @@ async function start() {
   startAutosaveLoop();
   startTickLoop();
 
-  supabase.auth.onAuthStateChange(async () => {
+  supabase.auth.onAuthStateChange(async (_event, session) => {
+    const userId = session?.user?.id ?? null;
+
+    // If auth identity changed, hydrate state from cloud BEFORE we render/save.
+    // This prevents overwriting an existing cloud save with a fresh default state on new devices/browsers.
+    if (!userId) {
+      lastAuthUserId = null;
+      state = createDefaultState();
+    } else if (userId !== lastAuthUserId) {
+      lastAuthUserId = userId;
+
+      const saved = await loadSave();
+      if (saved) {
+        state = saved;
+      } else {
+        // New player (or no save yet)
+        state = createDefaultState();
+      }
+    }
+
     await ensureRoutingAfterAuth();
+
+    if (userId && state.phase !== "phase0_onboarding") {
+      applyOfflineProgressIfAny();
+    }
+
     await saveNow();
   });
 

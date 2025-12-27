@@ -1,9 +1,6 @@
 import { wipeMySave } from "../../core/save.js";
 import { createDefaultState } from "../../core/state.js";
 
-const SUPABASE_URL = "https://raqqtppbtbcvkkenyqye.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_T913yWlRXNOAJt_rp81R8Q_NLshMz_i";
-
 function fmtMs(ms) {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
@@ -20,28 +17,14 @@ function escapeHtml(s) {
 }
 
 async function callFunction(api, name, payload) {
-  const { data: sessionData, error } = await api.supabase.auth.getSession();
-  if (error) throw error;
-
-  const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) throw new Error("No session access token (not logged in)");
-
-  const url = `${SUPABASE_URL}/functions/v1/${name}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_PUBLISHABLE_KEY,
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload || {}),
+  const { data, error } = await api.supabase.functions.invoke(name, {
+    body: payload || {},
   });
 
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(json?.error || json?.message || `Function ${name} failed (${res.status})`);
+  if (error) {
+    throw new Error(error.message || `Function ${name} failed`);
   }
-  return json;
+  return data;
 }
 
 export default {
@@ -216,7 +199,7 @@ export default {
         setAdminOut("Calling admin-users…");
         try {
           const res = await callFunction(api, "admin-users", {});
-          const lines = (res.users || []).map((u) => `${u.id}  ${u.email || ""}`);
+          const lines = (res?.users || []).map((u) => `${u.id}  ${u.email || ""}`);
           setAdminOut(lines.join("\n") || "(no users returned)");
         } catch (e) {
           setAdminOut(`Error: ${e?.message || e}`);
@@ -232,7 +215,7 @@ export default {
         setAdminOut("Calling admin-user-delete…");
         try {
           const res = await callFunction(api, "admin-user-delete", { user_id });
-          setAdminOut(`Deleted: ${res.deleted}`);
+          setAdminOut(`Deleted: ${res?.deleted || user_id}`);
         } catch (e) {
           setAdminOut(`Error: ${e?.message || e}`);
         }

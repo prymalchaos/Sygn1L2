@@ -88,3 +88,11 @@
 ### Changed
 - Phase 1 win flow submits one run per runId (submittedRunId guard).
 
+## [2025-12-29a] - 2025-12-29
+### Added
+- Phase 1 Time Trial panel (RUN/LAST/BEST).
+- Bottom buttons: Leaderboards / My Runs.
+### Fixed
+- Phase 1 win overlay no longer re-triggers when revisiting Phase 1 after Phase 2 unlock.
+- Time trial duration no longer records as 0ms.
+

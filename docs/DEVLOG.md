@@ -233,3 +233,22 @@
 
 **SQL**
 - Requires creating `phase_time_trials` table + RLS policies (see chat output).
+
+
+## 2025-12-29 (Sydney) – Fix Phase 1 win-loop + time trial clock + add bottom leaderboard buttons
+**Fixes**
+- Phase 1 win overlay no longer loops when returning from Phase 2:
+  - Introduced `phase1.run.state` ("running" | "completed") and gate win overlay to running runs only.
+- Time trial clock no longer shows 0ms:
+  - Run timing now uses `run.startedAt` and `run.completedAt`, set once per run.
+
+**UI**
+- Added Time Trial panel (RUN/LAST/BEST).
+- Added bottom buttons for leaderboards (Global + My Runs) to avoid interfering with gameplay.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/state.js (schema bump + run defaults)
+- src/core/pluginLoader.js (BUILD bump)
+- docs/DEVLOG.md
+- docs/CHANGELOG.md

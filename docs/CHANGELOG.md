@@ -81,3 +81,10 @@
 ### Fixed
 - Phase 1 boot crash: "Can't find variable: line" (badge popup hook now runs inside pushLog).
 
+## [2025-12-28l] - 2025-12-28
+### Added
+- Phase 1 Time Trial panel (run/best/last).
+- Phase 1 leaderboard modal (global + personal top 10) backed by Supabase `phase_time_trials`.
+### Changed
+- Phase 1 win flow submits one run per runId (submittedRunId guard).
+

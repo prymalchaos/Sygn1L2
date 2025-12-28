@@ -211,3 +211,25 @@
 **Fix**
 - Removed a stray `maybePopupFromLine(line);` statement that was outside any function (causing boot crash).
 - Moved popup trigger into `pushLog()` where `line` is in-scope.
+
+
+## 2025-12-28 (Sydney) – Phase 1 time trial leaderboard (Supabase)
+**Added**
+- Phase 1 Time Trial panel (RUN/BEST/LAST).
+- Phase 1 Leaderboard modal:
+  - Global Top 10 (Phase 1)
+  - My Top 10 (Phase 1)
+
+**Persistence**
+- On first win per run, the client submits a time trial row to Supabase table `phase_time_trials`.
+- Uses authenticated user id + profile username.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/state.js (schema bump; timeTrial.submittedRunId)
+- src/core/pluginLoader.js (BUILD bump)
+- docs/DEVLOG.md
+- docs/CHANGELOG.md
+
+**SQL**
+- Requires creating `phase_time_trials` table + RLS policies (see chat output).

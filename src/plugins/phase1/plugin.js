@@ -81,32 +81,6 @@ function processMilestones(p1) {
   if (isWinStable(p1)) fireMilestone(p1, "stabiliseWindow", "comms", "CONTROL//LOCK  Stabilisation window open. Maintain parameters for 10 seconds.");
 }
 
-
-function attachFastTap(el, handler) {
-  if (!el) return;
-  // click fallback
-  el.addEventListener("click", (e) => {
-    if (el.__fastTapFired) {
-      el.__fastTapFired = false;
-      return;
-    }
-    handler(e);
-  });
-  // instant touch response
-  el.addEventListener(
-    "pointerdown",
-    (e) => {
-      if (e.pointerType === "touch") {
-        e.preventDefault();
-        el.__fastTapFired = true;
-        handler(e);
-      }
-    },
-    { passive: false }
-  );
-}
-
-
 const UPGRADE_DEFS = [
   {
     id: "spsBoost",
@@ -169,25 +143,6 @@ const UPGRADE_DEFS = [
     effectText: (lvl) => `+${Math.floor((lvl + 1) * 10)}% purge power`,
     apply: (p1, nextLvl) => {
       p1.upgrades.purgeEfficiency = nextLvl;
-    },
-  },
-
-  {
-    id: "autopilotCore",
-    name: "AUTOPILOT CORE",
-    desc: "Auto-purges to hold corruption at 40% using 35% of earned signal.",
-    base: 260,
-    growth: 2.05,
-    effectText: (lvl, p1) => {
-      const ap = p1.autopilot;
-      const state = ap?.unlocked ? (ap.enabled ? "ON" : "OFF") : "LOCKED";
-      return `Status: ${state} • Target 40% • Budget 35%`;
-    },
-    apply: (p1, nextLvl) => {
-      p1.upgrades.autopilotCore = nextLvl;
-      p1.autopilot ??= { unlocked: false, enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95, budget: 0 };
-      p1.autopilot.unlocked = true;
-      p1.autopilot.enabled = true;
     },
   },
 ];
@@ -258,38 +213,6 @@ function isWinStable(p1) {
     isDefensiveReady(p1) &&
     !p1.isDefeated
   );
-
-function autoPurge(p1, budget) {
-  const ap = p1.autopilot;
-  if (!ap?.unlocked || !ap.enabled) return { budget, purges: 0, spent: 0 };
-
-  const target = ap.targetCorruption ?? 40;
-  let purges = 0;
-  let spent = 0;
-
-  // Only engage if above target.
-  while ((p1.corruption || 0) > target) {
-    const cost = purgeCost(p1);
-    if ((p1.signal || 0) < cost) break;
-    if (budget < cost) break;
-
-    const amt = purgeAmount(p1);
-    p1.signal -= cost;
-    budget -= cost;
-    spent += cost;
-    purges += 1;
-
-    p1.corruption = clamp((p1.corruption || 0) - amt, 0, 100);
-
-    if ((p1.corruption || 0) <= target) break;
-    // Safety break in case something goes weird
-    if (purges > 999) break;
-  }
-
-  return { budget, purges, spent };
-}
-
-
 }
 
 export default {
@@ -317,7 +240,7 @@ export default {
 
     p1.comms ??= [];
     p1.transmission ??= [];
-    p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0,  autopilotCore: 0 };
+    p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
     p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
 
@@ -333,87 +256,201 @@ export default {
     // Panel-heavy UI, phase-local styling
     root.innerHTML = `
       <style>
+        :root { color-scheme: dark; }
+        .p1-shell {
+          /* Bulkhead: brushed metal + grime + vignetting */
+          background:
+            radial-gradient(1200px 700px at 30% 20%, rgba(120,140,130,0.18), rgba(0,0,0,0) 55%),
+            radial-gradient(900px 700px at 80% 70%, rgba(80,100,90,0.14), rgba(0,0,0,0) 60%),
+            repeating-linear-gradient(90deg,
+              rgba(255,255,255,0.05) 0px,
+              rgba(255,255,255,0.00) 2px,
+              rgba(0,0,0,0.06) 6px),
+            linear-gradient(180deg, rgba(15,18,18,0.95), rgba(6,8,7,0.98));
+          min-height: 100vh;
+        }
+
         .p1-grid { display: grid; gap: 12px; }
+
         .p1-panel {
-          border: 1px solid rgba(215,255,224,0.16);
-          border-radius: 12px;
-          background: rgba(10,14,18,0.72);
+          border: 1px solid rgba(156,255,176,0.18);
+          border-radius: 14px;
+          background: rgba(6, 10, 8, 0.68);
           padding: 12px;
           position: relative;
           overflow: hidden;
+          box-shadow:
+            inset 0 0 0 1px rgba(0,0,0,0.50),
+            inset 0 0 24px rgba(0,0,0,0.65),
+            0 10px 30px rgba(0,0,0,0.45);
+          backdrop-filter: blur(2px);
         }
-        .p1-title { font-weight: 900; letter-spacing: 0.08em; font-size: 12px; opacity: 0.9; }
-        .p1-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-        .p1-scan:before {
+
+        /* CRT glass overlay: scanlines + vignette + mild flicker */
+        .p1-panel.p1-crt:before {
           content: "";
           position: absolute;
           inset: 0;
-          background: repeating-linear-gradient(
-            to bottom,
-            rgba(215,255,224,0.06) 0px,
-            rgba(215,255,224,0.03) 1px,
-            rgba(0,0,0,0) 3px
-          );
-          opacity: 0.35;
+          background:
+            repeating-linear-gradient(
+              to bottom,
+              rgba(156,255,176,0.055) 0px,
+              rgba(156,255,176,0.025) 1px,
+              rgba(0,0,0,0) 3px
+            ),
+            radial-gradient(110% 85% at 50% 35%,
+              rgba(156,255,176,0.08),
+              rgba(0,0,0,0) 55%),
+            radial-gradient(120% 95% at 50% 55%,
+              rgba(0,0,0,0) 35%,
+              rgba(0,0,0,0.62) 85%);
+          opacity: 0.9;
           pointer-events: none;
           mix-blend-mode: screen;
         }
-        .p1-btn {
-          padding: 10px;
-          border-radius: 10px;
-          border: 1px solid rgba(215,255,224,0.18);
-          background: rgba(5,7,10,0.35);
-          color: inherit;
+
+        .p1-panel.p1-crt:after {
+          content: "";
+          position: absolute;
+          inset: -40px;
+          background:
+            radial-gradient(closest-side, rgba(156,255,176,0.06), rgba(0,0,0,0) 65%),
+            repeating-linear-gradient(0deg,
+              rgba(255,255,255,0.00) 0px,
+              rgba(255,255,255,0.00) 6px,
+              rgba(255,255,255,0.015) 7px);
+          opacity: 0.22;
+          pointer-events: none;
+          animation: p1Flicker 6.5s infinite steps(1);
         }
-        .p1-btn:disabled { opacity: 0.45; }
-        .p1-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
-        .p1-stat { min-width: 140px; }
+
+        @keyframes p1Flicker {
+          0% { opacity: 0.20; transform: translateY(0px); }
+          2% { opacity: 0.28; }
+          3% { opacity: 0.17; }
+          7% { opacity: 0.24; transform: translateY(1px); }
+          11% { opacity: 0.19; }
+          12% { opacity: 0.27; }
+          60% { opacity: 0.21; transform: translateY(0px); }
+          61% { opacity: 0.26; }
+          62% { opacity: 0.18; }
+          100% { opacity: 0.20; transform: translateY(0px); }
+        }
+
+        .p1-title {
+          font-weight: 900;
+          letter-spacing: 0.10em;
+          font-size: 12px;
+          opacity: 0.95;
+          text-transform: uppercase;
+        }
+
+        .p1-mono, .p1-panel, .p1-btn, .p1-label, .p1-value {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        /* Phosphor text glow */
+        .p1-panel, .p1-mono {
+          color: rgba(156,255,176,0.92);
+          text-shadow:
+            0 0 6px rgba(156,255,176,0.18),
+            0 0 14px rgba(156,255,176,0.10);
+        }
+
         .p1-label { font-size: 12px; opacity: 0.82; }
         .p1-value { font-size: 20px; font-weight: 900; }
+
+        .p1-btn {
+          padding: 10px;
+          border-radius: 12px;
+          border: 1px solid rgba(156,255,176,0.22);
+          background:
+            linear-gradient(180deg, rgba(10,14,12,0.60), rgba(3,5,4,0.70));
+          color: rgba(156,255,176,0.95);
+          box-shadow:
+            inset 0 0 0 1px rgba(0,0,0,0.55),
+            inset 0 -10px 18px rgba(0,0,0,0.55);
+          -webkit-tap-highlight-color: rgba(0,0,0,0);
+          user-select: none;
+        }
+
+        .p1-btn:active {
+          transform: translateY(1px);
+          filter: brightness(1.12);
+          box-shadow:
+            inset 0 0 0 1px rgba(0,0,0,0.65),
+            inset 0 -6px 12px rgba(0,0,0,0.60);
+        }
+
+        .p1-btn:disabled { opacity: 0.45; }
+
+        .p1-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+
+        .p1-stat { min-width: 140px; }
+
         .p1-bar {
           height: 10px;
           border-radius: 99px;
-          border: 1px solid rgba(215,255,224,0.14);
-          background: rgba(5,7,10,0.35);
+          border: 1px solid rgba(156,255,176,0.18);
+          background: rgba(2,4,3,0.55);
           overflow: hidden;
+          box-shadow: inset 0 0 10px rgba(0,0,0,0.70);
         }
+
         .p1-fill {
           height: 100%;
           width: 0%;
-          background: rgba(215,255,224,0.55);
+          background:
+            linear-gradient(90deg, rgba(156,255,176,0.20), rgba(156,255,176,0.62));
+          box-shadow: 0 0 18px rgba(156,255,176,0.22);
         }
+
         .p1-two {
           display:grid;
           grid-template-columns: 1fr 260px;
           gap: 12px;
         }
-        @media (max-width: 740px) {
-          .p1-two { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 740px) { .p1-two { grid-template-columns: 1fr; } }
+
         .p1-logs {
           display:grid;
           grid-template-columns: 1fr 1fr;
           gap: 12px;
         }
-        @media (max-width: 740px) {
-          .p1-logs { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 740px) { .p1-logs { grid-template-columns: 1fr; } }
+
         .p1-logbox {
           height: 180px;
           overflow: auto;
-          border-radius: 10px;
-          border: 1px solid rgba(215,255,224,0.12);
-          background: rgba(5,7,10,0.30);
+          border-radius: 12px;
+          border: 1px solid rgba(156,255,176,0.16);
+          background: rgba(2,4,3,0.55);
           padding: 10px;
           line-height: 1.35;
           font-size: 12px;
-          opacity: 0.92;
+          opacity: 0.94;
           white-space: pre-wrap;
+          box-shadow: inset 0 0 18px rgba(0,0,0,0.75);
         }
-      </style>
 
+        /* Scope & osc look like embedded CRT windows */
+        .p1-scopebox {
+          border-radius: 14px;
+          border: 1px solid rgba(156,255,176,0.16);
+          background: rgba(1,3,2,0.62);
+          padding: 10px;
+          box-shadow: inset 0 0 22px rgba(0,0,0,0.80);
+        }
+
+        /* Subtle “tube curvature” */
+        .p1-curved {
+          border-radius: 18px;
+        }
+</style>
+
+      <div class="p1-shell">
       <div style="max-width: 980px; margin: 0 auto; padding: 14px;">
-        <div class="p1-panel p1-scan">
+        <div class="p1-panel p1-crt">
           <div class="p1-row">
             <div>
               <div class="p1-label">Logged in as</div>
@@ -429,7 +466,7 @@ export default {
         </div>
 
         <div class="p1-grid" style="margin-top:12px;">
-          <div class="p1-panel p1-scan">
+          <div class="p1-panel p1-crt">
             <div class="p1-row">
               <div class="p1-stat">
                 <div class="p1-label">Signal</div>
@@ -455,24 +492,23 @@ export default {
             <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
               <button id="ping" class="p1-btn" style="flex:1; min-width:160px;">Ping</button>
               <button id="purge" class="p1-btn" style="flex:1; min-width:160px;">Purge</button>
-              <button id="autopilot" class="p1-btn" style="flex:1; min-width:160px;">Autopilot</button>
             </div>
             <div id="hint" style="margin-top:8px; font-size:12px; opacity:0.85;"></div>
           </div>
 
           <div class="p1-two">
-            <div class="p1-panel p1-scan">
+            <div class="p1-panel p1-crt">
               <div class="p1-title">SCOPE</div>
-              <div id="scope" class="p1-mono" style="margin-top:8px; font-size:12px; opacity:0.9; white-space:pre;"></div>
+              <div class="p1-scopebox p1-curved"><div id="scope" class="p1-mono" style="font-size:12px; opacity:0.92; white-space:pre;"></div></div>
             </div>
 
-            <div class="p1-panel p1-scan">
+            <div class="p1-panel p1-crt">
               <div class="p1-title">OSC</div>
-              <div id="osc" class="p1-mono" style="margin-top:8px; font-size:12px; opacity:0.9; white-space:pre;"></div>
+              <div class="p1-scopebox p1-curved"><div id="osc" class="p1-mono" style="font-size:12px; opacity:0.92; white-space:pre;"></div></div>
             </div>
           </div>
 
-          <div class="p1-panel p1-scan">
+          <div class="p1-panel p1-crt">
             <div class="p1-title">UPGRADES</div>
             <div style="opacity:0.8; font-size:12px; margin-top:6px;">
               Buy systems to grow Signal and fight Corruption.
@@ -480,7 +516,7 @@ export default {
             <div id="shop" style="margin-top:10px; display:grid; gap:10px;"></div>
           </div>
 
-          <div class="p1-panel p1-scan">
+          <div class="p1-panel p1-crt">
             <div class="p1-title">COMMS + TRANSMISSION</div>
             <div class="p1-logs" style="margin-top:10px;">
               <div>
@@ -494,7 +530,7 @@ export default {
             </div>
           </div>
 
-          <div class="p1-panel p1-scan" style="display:${isDev ? "block" : "none"};">
+          <div class="p1-panel p1-crt" style="display:${isDev ? "block" : "none"};">
             <div class="p1-title">DEV</div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
               <button id="wipe" class="p1-btn">Wipe my save</button>
@@ -512,7 +548,7 @@ export default {
           </div>
 
           <div id="offlineOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.92); padding:14px;">
-            <div class="p1-panel p1-scan" style="max-width:720px; margin: 0 auto;">
+            <div class="p1-panel p1-crt" style="max-width:720px; margin: 0 auto;">
               <div class="p1-title">RETURN REPORT</div>
               <div id="offlineBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
               <button id="offlineAck" class="p1-btn" style="margin-top:12px; width:100%;">ACK</button>
@@ -520,7 +556,7 @@ export default {
           </div>
 
           <div id="defeatOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.94); padding:14px;">
-            <div class="p1-panel p1-scan" style="max-width:720px; margin: 0 auto;">
+            <div class="p1-panel p1-crt" style="max-width:720px; margin: 0 auto;">
               <div class="p1-title">SYSTEM FAILURE</div>
               <div id="defeatBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
               <button id="restart" class="p1-btn" style="margin-top:12px; width:100%;">RESTART PHASE</button>
@@ -528,7 +564,7 @@ export default {
           </div>
 
           <div id="winOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.94); padding:14px;">
-            <div class="p1-panel p1-scan" style="max-width:760px; margin: 0 auto;">
+            <div class="p1-panel p1-crt" style="max-width:760px; margin: 0 auto;">
               <div class="p1-title">STABILISATION ACHIEVED</div>
               <div id="winBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
               <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
@@ -540,6 +576,7 @@ export default {
 
         </div>
       </div>
+    </div>
     `;
 
     const $signal = root.querySelector("#signal");
@@ -585,7 +622,7 @@ export default {
     function renderShop() {
       const st = api.getState();
       const p1 = st.phases.phase1;
-      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0,  autopilotCore: 0 };
+      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
     p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
 
@@ -607,7 +644,7 @@ export default {
               <div style="font-weight:900; letter-spacing:0.03em;">${escapeHtml(def.name)}</div>
               <div style="opacity:0.82; font-size:12px; margin-top:4px;">${escapeHtml(def.desc)}</div>
               <div style="opacity:0.92; font-size:12px; margin-top:6px;">
-                Level <b>${lvl}</b> → ${escapeHtml(def.effectText(lvl, p1))}
+                Level <b>${lvl}</b> → ${escapeHtml(def.effectText(lvl))}
               </div>
             </div>
 
@@ -621,7 +658,7 @@ export default {
             </div>
           </div>
         `;
-        attachFastTap(row.querySelector(`[data-buy="${def.id}"]`), () => buy(def.id));
+        row.querySelector(`[data-buy="${def.id}"]`).onclick = () => buy(def.id);
         $shop.appendChild(row);
       }
     }
@@ -629,7 +666,7 @@ export default {
     function buy(upgradeId) {
       const st = api.getState();
       const p1 = st.phases.phase1;
-      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0,  autopilotCore: 0 };
+      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
     p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
 
@@ -673,7 +710,7 @@ export default {
       render();
     }
 
-    attachFastTap(root.querySelector("#ping"), () => {
+    root.querySelector("#ping").onclick = () => {
       const st = api.getState();
       const p1 = st.phases.phase1;
       if (p1.isDefeated) return;
@@ -686,27 +723,11 @@ export default {
       api.setState(st);
       api.saveSoon();
       render();
-    });
+    };
 
-    attachFastTap(root.querySelector("#purge"), () => doPurge());
+    root.querySelector("#purge").onclick = () => doPurge();
 
-    attachFastTap(root.querySelector("#autopilot"), () => {
-      const st = api.getState();
-      const p1 = st.phases.phase1;
-      p1.autopilot ??= { unlocked: false, enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95, budget: 0 };
-
-      if (!p1.autopilot.unlocked) {
-        pushLog(p1.comms, "CONTROL//NOTE  Autopilot not installed.");
-      } else {
-        p1.autopilot.enabled = !p1.autopilot.enabled;
-        pushLog(p1.transmission, `AUTOPILOT//${p1.autopilot.enabled ? "ENGAGED" : "DISENGAGED"}  Target ${p1.autopilot.targetCorruption}%`);
-      }
-
-      api.setState(st);
-      api.saveSoon();
-      render();
-    });
-// Dev tools
+    // Dev tools
     if (isDev) {
       const devMsg = root.querySelector("#devMsg");
       const setDevMsg = (t) => { devMsg.textContent = t || ""; };
@@ -882,14 +903,6 @@ function render() {
       $hint.textContent = `Corruption rate: ${rate.toFixed(2)}/s • Purge: -${Math.floor(purgeA)}% for ${nfmt(purgeC)} signal • ${winProgressText(p1)}`;
 
       renderShop();
-      // Autopilot button label
-      const apBtn = root.querySelector("#autopilot");
-      const ap = p1.autopilot;
-      if (apBtn) {
-        if (!ap?.unlocked) apBtn.textContent = "Autopilot: LOCKED";
-        else apBtn.textContent = `Autopilot: ${ap.enabled ? "ON" : "OFF"}`;
-      }
-
 
       $comms.textContent = (p1.comms || []).join("\n");
       $tx.textContent = (p1.transmission || []).join("\n");
@@ -963,26 +976,9 @@ function render() {
     const sps = state.signalPerSecond || 0;
     state.signal = (state.signal || 0) + sps * (dtMs / 1000);
 
-    
-    // Autopilot budget accrues from earned signal (not from your existing stash)
-    state.autopilot ??= { unlocked: false, enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95, budget: 0 };
-    if (state.autopilot.unlocked && state.autopilot.enabled) {
-      const gain = sps * (dtMs / 1000);
-      state.autopilot.budget = (state.autopilot.budget || 0) + gain * (state.autopilot.budgetFraction ?? 0.35);
-    }
-// Corruption pressure
+    // Corruption pressure
     const rate = computeCorruptionRate(state);
     state.corruption = clamp((state.corruption || 0) + rate * (dtMs / 1000), 0, 100);
-
-    
-    // Autopilot auto-purge after corruption advances
-    if (state.autopilot?.unlocked && state.autopilot.enabled) {
-      const res = autoPurge(state, state.autopilot.budget || 0);
-      state.autopilot.budget = res.budget;
-      if (res.purges > 0) {
-        pushLog(state.transmission, `AUTOPILOT//PURGE x${res.purges}  Spent ${nfmt(res.spent)} signal`);
-      }
-    }
 
     if (state.corruption >= 100) {
       state.isDefeated = true;
@@ -1035,27 +1031,7 @@ function render() {
     const rate = computeCorruptionRate(state);
     state.corruption = clamp(beforeCorr + rate * (dtMs / 1000), 0, 100);
 
-    
-
-    // Autopilot offline: spend a fraction of earned signal to hold corruption under target
-    state.autopilot ??= { unlocked: false, enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95, budget: 0 };
-    let autoPurges = 0;
-    let autoSpent = 0;
-    if (state.autopilot.unlocked && state.autopilot.enabled) {
-      const budget = Math.max(0, gain * (state.autopilot.budgetFraction ?? 0.35));
-      const res = autoPurge(state, budget);
-      autoPurges = res.purges;
-      autoSpent = res.spent;
-    }
-
-    // Offline safety: never hard-lose while away. Clamp to offlineCap.
-    const cap = state.autopilot?.offlineCap ?? 95;
-    if (state.corruption > cap) {
-      state.corruption = cap;
-    }
-
-    state.isDefeated = false;
-if (state.corruption >= 100) {
+    if (state.corruption >= 100) {
       state.isDefeated = true;
       state.winHoldMs = 0;
     }
@@ -1068,9 +1044,6 @@ if (state.corruption >= 100) {
       `Generated +${Math.floor(gain)} signal`,
       `Corruption: ${Math.floor(beforeCorr)}% → ${Math.floor(state.corruption)}%`,
     ];
-
-    if (autoPurges > 0) summary.push(`Autopilot executed ${autoPurges} purge(s) (spent ${nfmt(autoSpent)} signal)`);
-
 
     if (state.isDefeated) summary.push(`SYSTEM FAILURE occurred while offline.`);
     else summary.push(`Stabilisation timer resets while offline.`);

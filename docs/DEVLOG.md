@@ -187,19 +187,18 @@
 - src/core/pluginLoader.js
 
 
-## 2025-12-28 (Sydney) – Tick loop @ ~30fps + punchier scopes + sci-fi title glow
+## 2025-12-28 (Sydney) – Phase 1 character popups with procedural CRT avatars
 **Goal**
-- Make gameplay + scopes feel snappier and more reactive (especially on mobile).
-- Improve the global console title styling.
+- Add narrative popups that feel like crew comms, with tiny deterministic “CRT badge” avatars per speaker.
 
 **Changes**
-- Core tick loop now runs at ~30fps while the tab is visible (33ms interval), and throttles to 250ms when hidden.
-- Phase 1 Scope now reacts more aggressively to Ping (visible interference burst) and scrolls faster.
-- Phase 1 Oscilloscope adds Ping-driven jitter so it “kicks” when you transmit.
-- Global title "SYGN1L2 CONSOLE" updated with tighter sci-fi styling + subtle glow.
+- Added popup rail (top of screen) for milestone comms/transmission beats.
+- Procedural avatar generator (deterministic from speaker ID; no image assets).
+- Popups auto-dismiss after ~3.2s; tap to dismiss; keeps max 3 on screen.
 
 **Files touched**
-- src/core/boot.js
-- src/core/uiShell.js
 - src/plugins/phase1/plugin.js
-- src/core/pluginLoader.js
+- src/core/pluginLoader.js (BUILD bump)
+
+**Notes**
+- DOM references are kept phase-local (not stored in save state) to avoid serialization issues.

@@ -66,9 +66,7 @@
 - Restored Phase 1 CRT skin after scope patches overwrote styling.
 - Scopes now render even if requestAnimationFrame is throttled on mobile; added canvas debug label.
 
-## [2025-12-28l] - 2025-12-28
-### Changed
-- Core tick loop: ~30fps active, 250ms when hidden (visibility-based).
-- Phase 1 scopes: faster + more Ping-reactive.
-- UI shell title styling: sci-fi console vibe + glow.
+## [2025-12-28j] - 2025-12-28
+### Added
+- Phase 1 milestone popups with procedural CRT avatars (speaker badge portraits).
 

@@ -106,6 +106,31 @@ function pushLog(arr, line, max = 60) {
   maybePopupFromLine(line);
 }
 
+function attachFastTap(el, handler) {
+  if (!el) return;
+
+  el.addEventListener("click", (e) => {
+    if (el.__fastTapFired) {
+      el.__fastTapFired = false;
+      return;
+    }
+    handler(e);
+  });
+
+  el.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.pointerType === "touch") {
+        e.preventDefault();
+        el.__fastTapFired = true;
+        handler(e);
+      }
+    },
+    { passive: false }
+  );
+}
+
+
 function fireMilestone(p1, key, channel, line) {
   p1.flags ??= {};
   if (p1.flags[key]) return false;

@@ -57,3 +57,7 @@
 ### Fixed
 - Phase 1 render crash after replacing scope/osc with canvases (legacy text scope update is now guarded).
 
+## [2025-12-28j] - 2025-12-28
+### Fixed
+- Phase 1 scopes blank on some mobile layouts due to 0px canvas sizing; added sizing fallbacks and dev-only dimension debug.
+

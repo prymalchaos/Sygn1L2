@@ -160,3 +160,14 @@
 **Files touched**
 - src/plugins/phase1/plugin.js
 - src/core/pluginLoader.js (BUILD bump)
+
+
+## 2025-12-28 (Sydney) – Phase 1 scopes fix (iOS canvas sizing)
+**Fix**
+- Scopes could render blank because canvas sizing relied on getBoundingClientRect() returning 0 during initial iOS layout.
+- Updated sizing to fall back to offsetWidth/offsetHeight and setTransform(dpr,…) correctly.
+- Added dev-only scope debug labels showing canvas dimensions to confirm rendering.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js (BUILD bump)

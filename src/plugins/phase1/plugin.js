@@ -94,13 +94,14 @@ function attachFastTap(el, handler) {
   );
 }
 
-function attachHoldPing(btn, getIntervalMs, onTick) {
+function attachHoldPing(btn, getIntervalMs, onTick, onHoldChange) {
   if (!btn) return () => {};
   let holding = false;
   let timer = 0;
 
   const stop = () => {
     holding = false;
+    try { onHoldChange?.(false); } catch {}
     if (timer) clearInterval(timer);
     timer = 0;
   };
@@ -111,6 +112,7 @@ function attachHoldPing(btn, getIntervalMs, onTick) {
     e.stopPropagation();
     if (holding) return;
     holding = true;
+    try { onHoldChange?.(true); } catch {}
 
     try { btn.setPointerCapture?.(e.pointerId); } catch {}
 
@@ -290,7 +292,13 @@ const TUNE = {
   purgeBaseCost: 60,
   purgeCostReductionPerLvl: 0.07, // up to 60% reduction
   purgeBaseAmount: 18,          // percentage points
-  purgePowerPerLvl: 0.10,       // +10% per lvl
+  purgePowerPerLvl: 0.10,       // +10% per lvl  // Hold-to-ping balance
+  holdFatigueInc: 0.04,
+  holdFatigueTapRelief: 0.10,
+  holdFatigueDecayPerSec: 0.28,
+  holdMinPowerMult: 0.35,
+  holdOverheatNoise: 0.10,
+
 };
 
 
@@ -1287,12 +1295,29 @@ const $scope = root.querySelector("#scope");
       if (p1.isDefeated) return;
 
       // gameplay
-      p1.signal += p1.pingPower || 5;
+      p1.hold ??= { fatigue: 0 };
+      const basePower = p1.pingPower || 5;
 
-      // Ping creates "noise": small corruption bump if you spam it
-      p1.corruption = clamp((p1.corruption || 0) + TUNE.pingCorruptionNoise, 0, 100);
+      // Hold-to-ping is convenient, but builds "fatigue" that reduces efficiency and adds heat/noise.
+      let fatigue = clamp(p1.hold.fatigue || 0, 0, 1);
+      let powerMult = 1;
 
-      // visuals: spike the scope
+      if (fromHold) {
+        powerMult = Math.max(TUNE.holdMinPowerMult, 1 - 0.65 * fatigue);
+        fatigue = clamp(fatigue + TUNE.holdFatigueInc, 0, 1);
+      } else {
+        // Reward active tapping: it "stabilizes" the line and bleeds off fatigue.
+        fatigue = clamp(fatigue - TUNE.holdFatigueTapRelief, 0, 1);
+      }
+
+      p1.hold.fatigue = fatigue;
+
+      p1.signal += basePower * powerMult;
+
+      // Noise: tapping adds a small bump; holding adds extra heat when fatigued.
+      const extraHeat = fromHold ? (TUNE.holdOverheatNoise * fatigue) : 0;
+      p1.corruption = clamp((p1.corruption || 0) + TUNE.pingCorruptionNoise + extraHeat, 0, 100);
+// visuals: spike the scope
       vis.lastPingAt = Date.now();
       vis.shake = Math.min(1, (vis.shake || 0) + (fromHold ? 0.15 : 0.35));
 
@@ -1312,9 +1337,17 @@ const $scope = root.querySelector("#scope");
         const baseRate = 7; // pings/sec
         const lvl = (p1.upgrades?.pingBoost || 0);
         const rate = baseRate * (1 + lvl * 0.12);
-        return 1000 / Math.max(1, rate);
+        // As fatigue rises, holding slows a bit automatically (soft cap).
+        const fatigue = clamp(p1.hold?.fatigue || 0, 0, 1);
+        const slowMult = 1 + fatigue * 0.9;
+        return (1000 / Math.max(1, rate)) * slowMult;
       },
-      () => doPing(true)
+      () => doPing(true),
+      (on) => {
+        const st = api.getState();
+        st.phases.phase1._holdingPing = !!on;
+        api.setState(st);
+      }
     );
 
 
@@ -1482,10 +1515,37 @@ const $scope = root.querySelector("#scope");
     }
 
 function maybeWarn(p1) {
+      const now = Date.now();
       const c = p1.corruption || 0;
-      if (c >= 25 && !p1._warn25) { p1._warn25 = true; pushLog(p1.comms, "CONTROL//WARN  Corruption rising. Consider Noise Canceller."); }
-      if (c >= 50 && !p1._warn50) { p1._warn50 = true; pushLog(p1.comms, "CONTROL//WARN  Integrity degraded. Purge recommended."); }
-      if (c >= 75 && !p1._warn75) { p1._warn75 = true; pushLog(p1.comms, "CONTROL//ALERT  Critical corruption. Immediate action required."); }
+
+      // Persist warnings across sessions (avoid underscore keys which may be stripped by serializers).
+      p1.warnFlags ??= { c25: false, c50: false, c75: false };
+      // Migrate legacy flags if present
+      if (p1._warn25) { p1.warnFlags.c25 = true; delete p1._warn25; }
+      if (p1._warn50) { p1.warnFlags.c50 = true; delete p1._warn50; }
+      if (p1._warn75) { p1.warnFlags.c75 = true; delete p1._warn75; }
+
+      p1.warnCooldownUntil ??= 0;
+
+      // Cooldown so popups don't spam when corruption stays high (especially after login/offline progress).
+      const canWarn = now >= p1.warnCooldownUntil;
+
+      if (c >= 25 && !p1.warnFlags.c25) {
+        p1.warnFlags.c25 = true;
+        pushLog(p1.comms, "CONTROL//WARN  Corruption rising. Consider Noise Canceller.");
+      }
+
+      if (c >= 50 && !p1.warnFlags.c50 && canWarn) {
+        p1.warnFlags.c50 = true;
+        p1.warnCooldownUntil = now + 20000; // 20s cooldown
+        pushLog(p1.comms, "CONTROL//WARN  Integrity degraded. Purge recommended.");
+      }
+
+      if (c >= 75 && !p1.warnFlags.c75 && canWarn) {
+        p1.warnFlags.c75 = true;
+        p1.warnCooldownUntil = now + 15000; // 15s cooldown
+        pushLog(p1.comms, "CONTROL//ALERT  Critical corruption. Immediate action required.");
+      }
     }
 
     function winProgressText(p1) {
@@ -1744,6 +1804,13 @@ if (p1.isDefeated) {
 
   tick({ state, dtMs }) {
     if (state.isDefeated) return { state };
+
+    // Hold-to-ping fatigue decay (prevents "hold forever" dominance)
+    state.hold ??= { fatigue: 0 };
+    const holding = !!state._holdingPing;
+    const decay = TUNE.holdFatigueDecayPerSec * (dtMs / 1000);
+    if (!holding) state.hold.fatigue = clamp((state.hold.fatigue || 0) - decay, 0, 1);
+
 
     // Signal gain
     const sps = state.signalPerSecond || 0;

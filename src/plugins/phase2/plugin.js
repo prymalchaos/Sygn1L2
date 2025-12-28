@@ -242,6 +242,7 @@ export default {
             </div>
             <div style="display:flex; gap:10px;">
               <button id="toP1" class="p2-btn">Back to Phase 1</button>
+              <button id="restartP1" class="p2-btn">Restart Phase 1 (Time Trial)</button>
               <button id="logout" class="p2-btn">Logout</button>
             </div>
           </div>
@@ -353,6 +354,31 @@ export default {
     });
 
     attachFastTap(root.querySelector("#toP1"), async () => {
+      await api.setPhase("phase1");
+    });
+
+    attachFastTap(root.querySelector("#restartP1"), async () => {
+      const st = api.getState();
+      const old = st.phases.phase1 || {};
+      old.timeTrial ??= { bestMs: null, lastMs: null, runId: 0 };
+      const keepBest = old.timeTrial.bestMs;
+      const now = Date.now();
+      st.phases.phase1 = {
+        bootedAt: now,
+        signal: 0,
+        signalPerSecond: 0.5,
+        pingPower: 5,
+        corruption: 0,
+        corruptionRateBase: 0.18,
+        upgrades: { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0, autopilotCore: 0 },
+        autopilot: { unlocked: (old.autopilot?.unlocked || false), enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95 },
+        timeTrial: { bestMs: keepBest ?? null, lastMs: null, runId: (old.timeTrial.runId || 0) + 1 },
+        win: { achieved: false, handled: false, achievedAt: null },
+        comms: [],
+        transmission: [],
+      };
+      api.setState(st);
+      api.saveSoon();
       await api.setPhase("phase1");
     });
 

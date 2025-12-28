@@ -205,3 +205,9 @@
 **Files touched**
 - src/plugins/phase1/plugin.js
 - src/core/pluginLoader.js (BUILD bump for cache-busting)
+
+
+## 2025-12-28 (Sydney) – Hotfix: Phase 1 boot error "Can't find variable: line"
+**Fix**
+- Removed a stray `maybePopupFromLine(line);` statement that was outside any function (causing boot crash).
+- Moved popup trigger into `pushLog()` where `line` is in-scope.

@@ -77,3 +77,7 @@
 ### Fixed
 - Restored Phase 1 milestone popups with procedural CRT badge avatars (lost in earlier patch overwrite).
 
+## [2025-12-28k] - 2025-12-28
+### Fixed
+- Phase 1 boot crash: "Can't find variable: line" (badge popup hook now runs inside pushLog).
+

@@ -185,3 +185,21 @@
 **Files touched**
 - src/plugins/phase1/plugin.js
 - src/core/pluginLoader.js
+
+
+## 2025-12-28 (Sydney) – Tick loop @ ~30fps + punchier scopes + sci-fi title glow
+**Goal**
+- Make gameplay + scopes feel snappier and more reactive (especially on mobile).
+- Improve the global console title styling.
+
+**Changes**
+- Core tick loop now runs at ~30fps while the tab is visible (33ms interval), and throttles to 250ms when hidden.
+- Phase 1 Scope now reacts more aggressively to Ping (visible interference burst) and scrolls faster.
+- Phase 1 Oscilloscope adds Ping-driven jitter so it “kicks” when you transmit.
+- Global title "SYGN1L2 CONSOLE" updated with tighter sci-fi styling + subtle glow.
+
+**Files touched**
+- src/core/boot.js
+- src/core/uiShell.js
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js

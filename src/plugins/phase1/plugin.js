@@ -67,10 +67,8 @@ function maybePopupFromLine(line) {
 function pushLog(arr, line, max = 60) {
   arr.push(`[${nowStamp()}] ${line}`);
   while (arr.length > max) arr.shift();
-}
   maybePopupFromLine(line);
-
-
+}
 
 function fireMilestone(p1, key, channel, line) {
   p1.flags ??= {};

@@ -45,9 +45,11 @@
 - Default state schema bumped to 5 with Phase 2 state fields.
 - Plugin loader BUILD bumped for cache-busting.
 
-## [2025-12-28g] - 2025-12-28
+## [2025-12-28h] - 2025-12-28
 ### Added
-- Phase 1 CRT console skin: bulkhead background, phosphor glow, scanlines/vignette/flicker, inset scope/osc windows.
+- Phase 1 animated scopes:
+  - CRT sine-wave scope display with corruption noise and ping kick.
+  - Lissajous oscilloscope that becomes a perfect circle at 100% synchronicity.
 ### Changed
 - Plugin loader BUILD bumped for cache-busting.
 

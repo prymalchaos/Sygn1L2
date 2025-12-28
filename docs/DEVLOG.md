@@ -132,23 +132,21 @@
 4. Let Heat reach 100% to trigger Overheat lockout overlay.
 
 
-## 2025-12-28 (Sydney) – Phase 1 CRT console skin (Aliens mining vessel aesthetic)
+## 2025-12-28 (Sydney) – Phase 1 scopes (CRT waveform + circle oscilloscope)
 **Goal**
-- Make Phase 1 feel like a retro CRT terminal on an industrial mining vessel: phosphor green, scanlines, bulkhead, embedded displays.
+- Replace text scopes with animated CRT-style displays:
+  - Scope bar as a sine-wave based flow display (with noise from corruption and ping “kicks”).
+  - Oscilloscope as a Lissajous figure that tightens into a perfect circle at 100% synchronicity.
 
-**Changes**
-- Added phase-local CRT skin:
-  - Bulkhead background (brushed metal/grime gradients)
-  - Phosphor-green text glow
-  - CRT scanlines + vignette + subtle flicker
-  - More tactile button styling + press feedback
-  - Scope/osc areas styled like embedded CRT windows
+**Design**
+- Scope amplitude scales with SPS and corruption (instability).
+- Oscilloscope synchronicity is based on progress toward the Phase 1 signal win threshold (12,000); at 100% the figure becomes a perfect circle (90° phase offset).
 
 **Files touched**
 - src/plugins/phase1/plugin.js
-- src/core/pluginLoader.js (BUILD bump for cache-busting)
+- src/core/pluginLoader.js (BUILD bump)
 
 **How to test**
-1. Load Phase 1 with a cache buster (e.g. ?v=crt1).
-2. Confirm panels have scanlines/vignette and green phosphor glow.
-3. Confirm buttons feel mechanical and scope/osc look inset.
+1. Load Phase 1 (?v=scopes1).
+2. Watch scope waveform respond to SPS changes and corruption.
+3. Observe oscilloscope tighten as Signal approaches 12,000.

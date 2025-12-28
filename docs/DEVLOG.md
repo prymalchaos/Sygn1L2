@@ -187,18 +187,7 @@
 - src/core/pluginLoader.js
 
 
-## 2025-12-28 (Sydney) – Phase 1 character popups with procedural CRT avatars
-**Goal**
-- Add narrative popups that feel like crew comms, with tiny deterministic “CRT badge” avatars per speaker.
-
-**Changes**
-- Added popup rail (top of screen) for milestone comms/transmission beats.
-- Procedural avatar generator (deterministic from speaker ID; no image assets).
-- Popups auto-dismiss after ~3.2s; tap to dismiss; keeps max 3 on screen.
-
-**Files touched**
-- src/plugins/phase1/plugin.js
-- src/core/pluginLoader.js (BUILD bump)
-
-**Notes**
-- DOM references are kept phase-local (not stored in save state) to avoid serialization issues.
+## 2025-12-28 (Sydney) – Phase 1 time trial reset + win popup loop fix
+- Added Phase 1 run reset (time trial) while preserving best completion time.
+- Win overlay now shows once per run (guarded by phase1.win.handled).
+- Phase 2 provides a “Restart Phase 1 (Time Trial)” button.

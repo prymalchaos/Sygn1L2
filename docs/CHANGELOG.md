@@ -68,5 +68,8 @@
 
 ## [2025-12-28j] - 2025-12-28
 ### Added
-- Phase 1 milestone popups with procedural CRT avatars (speaker badge portraits).
+- Phase 1 time trial reset (preserves best time, records last time).
+- Phase 2: Restart Phase 1 (Time Trial) navigation.
+### Fixed
+- Win overlay no longer repeats when revisiting Phase 1 after Phase 2 unlock.
 

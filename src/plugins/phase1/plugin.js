@@ -42,175 +42,10 @@ function nowStamp() {
   return `${hh}:${mm}:${ss}`;
 }
 
-let __PHASE1_ROOT = null;
-
 function pushLog(arr, line, max = 60) {
   arr.push(`[${nowStamp()}] ${line}`);
   while (arr.length > max) arr.shift();
 }
-
-
-function hash32(str) {
-  // FNV-1a 32-bit
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-function drawAvatar(canvas, id) {
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width = 24;
-  const h = canvas.height = 24;
-  ctx.imageSmoothingEnabled = false;
-
-  const seed = hash32(id);
-  const r = (n) => (seed >>> n) & 255;
-
-  ctx.clearRect(0,0,w,h);
-
-  // palette (phosphor shades)
-  const bg = "rgba(0,0,0,0.0)";
-  const dim = "rgba(156,255,176,0.28)";
-  const mid = "rgba(156,255,176,0.55)";
-  const hot = "rgba(156,255,176,0.88)";
-
-  // Helper: draw pixel
-  const px = (x,y,c) => { ctx.fillStyle=c; ctx.fillRect(x,y,1,1); };
-
-  // Frame corners
-  for (let x=0;x<w;x++){ px(x,0,dim); px(x,h-1,dim); }
-  for (let y=0;y<h;y++){ px(0,y,dim); px(w-1,y,dim); }
-
-  // Symmetric “crew badge” face generator (12x24 mirrored)
-  const faceType = (seed >>> 1) % 4;
-  const eyeY = 8 + ((seed >>> 3) % 3);
-  const eyeX = 6 + ((seed >>> 5) % 2);
-  const mouthY = 15 + ((seed >>> 7) % 2);
-
-  // Head silhouette
-  for (let y=3; y<21; y++){
-    const inset = Math.max(0, Math.floor(Math.abs(12 - y) * 0.22) - 1);
-    for (let x=3+inset; x<12-inset; x++){
-      const c = (x+y+seed)%9===0 ? dim : mid;
-      px(x,y,c);
-      px(w-1-x,y,c);
-    }
-  }
-
-  // “Helmet” band
-  if (faceType === 1 || faceType === 3){
-    for (let x=4; x<20; x++){
-      px(x,5,hot);
-      if (x%2===0) px(x,6,dim);
-    }
-  }
-
-  // Eyes (hot pixels)
-  px(eyeX, eyeY, hot);
-  px(w-1-eyeX, eyeY, hot);
-  if (faceType === 2){
-    px(eyeX-1, eyeY, dim);
-    px(w-eyeX, eyeY, dim);
-  }
-
-  // Nose / center line
-  for (let y=eyeY+1; y<mouthY; y++){
-    if ((seed>>>y)&1) px(12,y,dim);
-  }
-
-  // Mouth
-  for (let x=8; x<16; x++){
-    px(x,mouthY, (x%2===0) ? hot : mid);
-  }
-  if (faceType === 0){
-    px(10,mouthY+1,dim); px(14,mouthY+1,dim);
-  }
-
-  // “Comms mic” or “respirator”
-  if (faceType === 3){
-    for (let y=16; y<20; y++){
-      px(7,y,dim); px(17,y,dim);
-    }
-    for (let x=9; x<15; x++){
-      px(x,18,hot);
-    }
-  }
-}
-
-function parseSpeaker(line) {
-  const m = String(line).match(/^([A-Z0-9 _-]+)\/\//);
-  return m ? m[1].trim() : "COMMS";
-}
-
-function stripSpeaker(line) {
-  return String(line).replace(/^([A-Z0-9 _-]+)\/\//, "").trim();
-}
-
-function showCharacterPopup(root, speaker, body) {
-  const rail = root.querySelector("#popupRail");
-  if (!rail) return;
-
-  const el = document.createElement("div");
-  el.className = "p1-popup p1-mono";
-
-  const canvas = document.createElement("canvas");
-  canvas.className = "p1-avatar";
-  drawAvatar(canvas, speaker);
-
-  const txt = document.createElement("div");
-  txt.style.flex = "1";
-
-  const hdr = document.createElement("div");
-  hdr.className = "p1-popupHdr";
-  hdr.textContent = speaker;
-
-  const msg = document.createElement("div");
-  msg.className = "p1-popupBody";
-  msg.textContent = body;
-
-  txt.appendChild(hdr);
-  txt.appendChild(msg);
-
-  const close = document.createElement("div");
-  close.className = "p1-popupClose";
-  close.textContent = "×";
-
-  el.appendChild(canvas);
-  el.appendChild(txt);
-  el.appendChild(close);
-
-  rail.appendChild(el);
-
-  // animate in
-  requestAnimationFrame(() => {
-    el.style.opacity = "1";
-    el.style.transform = "translateY(0px)";
-  });
-
-  const kill = () => {
-    el.style.opacity = "0";
-    el.style.transform = "translateY(-6px)";
-    setTimeout(() => el.remove(), 180);
-  };
-
-  el.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    kill();
-  }, { passive:false });
-
-  // auto dismiss
-  setTimeout(kill, 3200);
-
-  // keep rail tidy
-  while (rail.children.length > 3) {
-    rail.removeChild(rail.firstChild);
-  }
-}
-
 
 
 function fireMilestone(p1, key, channel, line) {
@@ -219,13 +54,6 @@ function fireMilestone(p1, key, channel, line) {
   p1.flags[key] = true;
   if (channel === "comms") pushLog(p1.comms, line);
   else pushLog(p1.transmission, line);
-  
-  // Narrative popups with tiny procedural avatars
-  if (typeof document !== "undefined" && __PHASE1_ROOT) {
-    const sp = parseSpeaker(line);
-    const body = stripSpeaker(line);
-    showCharacterPopup(__PHASE1_ROOT, sp, body);
-  }
   return true;
 }
 
@@ -413,7 +241,9 @@ export default {
     p1.comms ??= [];
     p1.transmission ??= [];
     p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
-    p1.flags ??= {};
+        p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0 };
+    p1.win ??= { achieved: false, handled: false, achievedAt: null };
+p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
 
     api.setState(stInit);
@@ -616,59 +446,6 @@ export default {
           box-shadow: inset 0 0 22px rgba(0,0,0,0.80);
         }
         .p1-curved{ border-radius: 18px; }
-
-        .p1-popup{
-          display:flex;
-          gap:10px;
-          align-items:flex-start;
-          padding:10px 12px;
-          border-radius: 14px;
-          border: 1px solid rgba(156,255,176,0.22);
-          background: rgba(2,4,3,0.82);
-          box-shadow: inset 0 0 16px rgba(0,0,0,0.70), 0 10px 26px rgba(0,0,0,0.55);
-          pointer-events:auto;
-          user-select:none;
-          transform: translateY(-6px);
-          opacity: 0;
-          transition: opacity 160ms linear, transform 160ms ease;
-          position: relative;
-          overflow:hidden;
-        }
-        .p1-popup:before{
-          content:"";
-          position:absolute; inset:0;
-          background: repeating-linear-gradient(to bottom,
-            rgba(156,255,176,0.055) 0px,
-            rgba(156,255,176,0.020) 1px,
-            rgba(0,0,0,0) 3px);
-          opacity:0.9;
-          pointer-events:none;
-          mix-blend-mode:screen;
-        }
-        .p1-avatar{
-          width:42px; height:42px;
-          border-radius: 10px;
-          border:1px solid rgba(156,255,176,0.20);
-          background: rgba(0,0,0,0.25);
-          box-shadow: inset 0 0 14px rgba(0,0,0,0.75);
-        }
-        .p1-popupHdr{
-          font-weight:900;
-          letter-spacing:0.10em;
-          font-size:11px;
-          opacity:0.90;
-        }
-        .p1-popupBody{
-          font-size:12px;
-          opacity:0.88;
-          margin-top:2px;
-          line-height:1.25;
-        }
-        .p1-popupClose{
-          margin-left:auto;
-          opacity:0.65;
-          font-size:12px;
-        }
 </style>
 
       <div class="p1-shell">
@@ -778,8 +555,6 @@ export default {
             </div>
           </div>
 
-          <div id="popupRail" style="position:fixed; top:12px; left:12px; right:12px; display:flex; flex-direction:column; gap:10px; pointer-events:none; z-index:50;"></div>
-
           <div id="defeatOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.94); padding:14px;">
             <div class="p1-panel p1-crt" style="max-width:720px; margin: 0 auto;">
               <div class="p1-title">SYSTEM FAILURE</div>
@@ -804,8 +579,6 @@ export default {
     </div>
     `;
 
-
-    __PHASE1_ROOT = root;
     const $signal = root.querySelector("#signal");
     const $sps = root.querySelector("#sps");
     const $pingPower = root.querySelector("#pingPower");
@@ -1249,7 +1022,12 @@ const $scope = root.querySelector("#scope");
         st.meta.unlockedPhases.phase2 = true;
         api.setState(st);
         api.saveSoon();
-        await api.setPhase("phase2");
+        const st2 = api.getState();
+      st2.phases.phase1.win ??= { achieved: true, handled: false, achievedAt: null };
+      st2.phases.phase1.win.handled = true;
+      api.setState(st2);
+      api.saveSoon();
+      await api.setPhase("phase2");
       };
     }
 
@@ -1306,11 +1084,48 @@ const $scope = root.querySelector("#scope");
       const st = api.getState();
       if (!st?.meta?.unlockedPhases?.phase2) return;
       winOverlay.style.display = "none";
+      const st2 = api.getState();
+      st2.phases.phase1.win ??= { achieved: true, handled: false, achievedAt: null };
+      st2.phases.phase1.win.handled = true;
+      api.setState(st2);
+      api.saveSoon();
       await api.setPhase("phase2");
     };
     stayBtn.onclick = () => { winOverlay.style.display = "none"; };
 
-    function maybeWarn(p1) {
+    
+    function resetPhase1ForTimeTrial() {
+      const st = api.getState();
+      const old = st.phases.phase1;
+
+      old.timeTrial ??= { bestMs: null, lastMs: null, runId: 0 };
+      const keepBest = old.timeTrial.bestMs;
+
+      const now = Date.now();
+      st.phases.phase1 = {
+        bootedAt: now,
+        signal: 0,
+        signalPerSecond: 0.5,
+        pingPower: 5,
+        corruption: 0,
+        corruptionRateBase: 0.18,
+        upgrades: { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0, autopilotCore: 0 },
+        autopilot: { unlocked: (old.autopilot?.unlocked || false), enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95 },
+        timeTrial: { bestMs: keepBest ?? null, lastMs: null, runId: (old.timeTrial.runId || 0) + 1 },
+        win: { achieved: false, handled: false, achievedAt: null },
+        comms: [],
+        transmission: [],
+      };
+
+      pushLog(st.phases.phase1.comms, "CONTROL//RESET  Phase 1 restarted (time trial).");
+      pushLog(st.phases.phase1.transmission, "OPS//NOTE  Clock restarted. Run clean.");
+
+      api.setState(st);
+      api.saveSoon();
+      render();
+    }
+
+function maybeWarn(p1) {
       const c = p1.corruption || 0;
       if (c >= 25 && !p1._warn25) { p1._warn25 = true; pushLog(p1.comms, "CONTROL//WARN  Corruption rising. Consider Noise Canceller."); }
       if (c >= 50 && !p1._warn50) { p1._warn50 = true; pushLog(p1.comms, "CONTROL//WARN  Integrity degraded. Purge recommended."); }
@@ -1415,7 +1230,18 @@ if (p1.isDefeated) {
             CONTROL//RETURN  “You did it. The ship’s quiet. For now.”
           </div>
         `;
-        winOverlay.style.display = "block";
+        // Mark win once and store time trial stats
+        p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0 };
+        p1.win ??= { achieved: false, handled: false, achievedAt: null };
+        if (!p1.win.achieved) {
+          p1.win.achieved = true;
+          p1.win.achievedAt = Date.now();
+          const runMs = Math.max(0, p1.win.achievedAt - (p1.bootedAt || p1.win.achievedAt));
+          p1.timeTrial.lastMs = runMs;
+          if (p1.timeTrial.bestMs == null || runMs < p1.timeTrial.bestMs) p1.timeTrial.bestMs = runMs;
+        }
+
+        if (!p1.win?.handled) { winOverlay.style.display = "block"; }
       }
     }
 
@@ -1438,12 +1264,6 @@ if (p1.isDefeated) {
   },
 
   unmount() {
-    __PHASE1_ROOT = null;
-
-    try {
-      // best-effort cleanup
-      // (state object is persisted; do not keep DOM refs)
-    } catch (e) {}
     if (this._cleanup) this._cleanup();
   },
 

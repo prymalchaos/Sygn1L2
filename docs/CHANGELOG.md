@@ -100,3 +100,7 @@
 ### Fixed
 - Phase 1 boot crash: "Can't find variable: attachFastTap".
 
+## [2025-12-29c] - 2025-12-29
+### Fixed
+- Phase 1 boot crash: "Can't find variable: root" (leaderboard wiring now runs inside mount; imports restored to top-level).
+

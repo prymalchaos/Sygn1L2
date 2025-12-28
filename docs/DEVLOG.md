@@ -257,3 +257,9 @@
 ## 2025-12-29 (Sydney) – Hotfix: attachFastTap undefined in Phase 1
 **Fix**
 - Added `attachFastTap()` helper to Phase 1 plugin (matching Phase 2) to prevent boot crash.
+
+
+## 2025-12-29 (Sydney) – Hotfix: Phase 1 boot errors (root/ESM ordering)
+**Fix**
+- Removed executable code that was running before imports in `phase1/plugin.js` (ES modules require imports first).
+- Moved leaderboard helpers and button wiring inside `mount(root, api)` so `root` is always defined.

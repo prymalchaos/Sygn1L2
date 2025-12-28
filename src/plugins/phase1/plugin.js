@@ -94,6 +94,53 @@ function attachFastTap(el, handler) {
   );
 }
 
+function attachHoldPing(btn, getIntervalMs, onTick) {
+  if (!btn) return () => {};
+  let holding = false;
+  let timer = 0;
+
+  const stop = () => {
+    holding = false;
+    if (timer) clearInterval(timer);
+    timer = 0;
+  };
+
+  const start = (e) => {
+    // prevent iOS text selection/callout
+    e.preventDefault();
+    e.stopPropagation();
+    if (holding) return;
+    holding = true;
+
+    try { btn.setPointerCapture?.(e.pointerId); } catch {}
+
+    // immediate tick
+    onTick(true);
+
+    const interval = Math.max(25, Math.floor(getIntervalMs()));
+    timer = setInterval(() => {
+      if (!holding) return;
+      onTick(true);
+    }, interval);
+  };
+
+  btn.style.touchAction = "manipulation";
+  btn.style.webkitUserSelect = "none";
+  btn.style.userSelect = "none";
+  btn.style.webkitTouchCallout = "none";
+
+  // IMPORTANT: pointerdown must be non-passive so preventDefault works on iOS
+  btn.addEventListener("pointerdown", start, { passive: false });
+  btn.addEventListener("pointerup", stop, { passive: true });
+  btn.addEventListener("pointercancel", stop, { passive: true });
+  btn.addEventListener("pointerleave", stop, { passive: true });
+
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+
+  return stop;
+}
+
+
 
 function fireMilestone(p1, key, channel, line) {
   p1.flags ??= {};
@@ -360,7 +407,7 @@ p1.flags ??= {};
           mix-blend-mode: screen;
         }
         .p1-btn {
-          padding: 10px;
+          -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;padding: 10px;
           border-radius: 10px;
           border: 1px solid rgba(215,255,224,0.18);
           background: rgba(5,7,10,0.35);
@@ -508,7 +555,7 @@ p1.flags ??= {};
           100%{opacity:0.20; transform:translateY(0px);}
         }
 
-        .p1-btn{
+        .p1-btn{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
           border:1px solid rgba(156,255,176,0.22);
           background: linear-gradient(180deg, rgba(10,14,12,0.60), rgba(3,5,4,0.70));
           box-shadow: inset 0 0 0 1px rgba(0,0,0,0.55), inset 0 -10px 18px rgba(0,0,0,0.55);
@@ -941,7 +988,7 @@ p1.flags ??= {};
       // Ping “kick” makes a temporary spike/noise burst
       const sincePing = (Date.now() - vis.lastPingAt) / 1000;
       const kick = Math.max(0, 1 - sincePing * 4); // fades in ~0.25s
-      const kickAmp = kick * 0.25;
+      const kickAmp = kick * (0.35 + 0.25 * (vis.shake || 0));
 
       // Draw waveform
       const mid = h * 0.5;
@@ -1195,6 +1242,10 @@ const $scope = root.querySelector("#scope");
       const dt = Math.min(0.05, (t - lastFrame) / 1000);
       lastFrame = t;
 
+      // decay ping shake
+      vis.shake = Math.max(0, (vis.shake || 0) - dt * 3.5);
+
+
       const st = api.getState();
       const p1 = st.phases.phase1;
 
@@ -1229,20 +1280,43 @@ const $scope = root.querySelector("#scope");
       render();
     }
 
-    root.querySelector("#ping").onclick = () => {
+    
+    function doPing(fromHold = false) {
       const st = api.getState();
       const p1 = st.phases.phase1;
       if (p1.isDefeated) return;
 
+      // gameplay
       p1.signal += p1.pingPower || 5;
 
       // Ping creates "noise": small corruption bump if you spam it
       p1.corruption = clamp((p1.corruption || 0) + TUNE.pingCorruptionNoise, 0, 100);
 
+      // visuals: spike the scope
+      vis.lastPingAt = Date.now();
+      vis.shake = Math.min(1, (vis.shake || 0) + (fromHold ? 0.15 : 0.35));
+
       api.setState(st);
       api.saveSoon();
       render();
-    };
+    }
+
+    // Ping: tap + press-and-hold auto-ping
+    const $ping = root.querySelector("#ping");
+    attachFastTap($ping, () => doPing(false));
+    attachHoldPing(
+      $ping,
+      () => {
+        const st = api.getState();
+        const p1 = st.phases.phase1;
+        const baseRate = 7; // pings/sec
+        const lvl = (p1.upgrades?.pingBoost || 0);
+        const rate = baseRate * (1 + lvl * 0.12);
+        return 1000 / Math.max(1, rate);
+      },
+      () => doPing(true)
+    );
+
 
     root.querySelector("#purge").onclick = () => doPurge();
 

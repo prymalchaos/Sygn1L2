@@ -256,201 +256,103 @@ export default {
     // Panel-heavy UI, phase-local styling
     root.innerHTML = `
       <style>
-        :root { color-scheme: dark; }
-        .p1-shell {
-          /* Bulkhead: brushed metal + grime + vignetting */
-          background:
-            radial-gradient(1200px 700px at 30% 20%, rgba(120,140,130,0.18), rgba(0,0,0,0) 55%),
-            radial-gradient(900px 700px at 80% 70%, rgba(80,100,90,0.14), rgba(0,0,0,0) 60%),
-            repeating-linear-gradient(90deg,
-              rgba(255,255,255,0.05) 0px,
-              rgba(255,255,255,0.00) 2px,
-              rgba(0,0,0,0.06) 6px),
-            linear-gradient(180deg, rgba(15,18,18,0.95), rgba(6,8,7,0.98));
-          min-height: 100vh;
-        }
-
         .p1-grid { display: grid; gap: 12px; }
-
         .p1-panel {
-          border: 1px solid rgba(156,255,176,0.18);
-          border-radius: 14px;
-          background: rgba(6, 10, 8, 0.68);
+          border: 1px solid rgba(215,255,224,0.16);
+          border-radius: 12px;
+          background: rgba(10,14,18,0.72);
           padding: 12px;
           position: relative;
           overflow: hidden;
-          box-shadow:
-            inset 0 0 0 1px rgba(0,0,0,0.50),
-            inset 0 0 24px rgba(0,0,0,0.65),
-            0 10px 30px rgba(0,0,0,0.45);
-          backdrop-filter: blur(2px);
         }
-
-        /* CRT glass overlay: scanlines + vignette + mild flicker */
-        .p1-panel.p1-crt:before {
+        .p1-title { font-weight: 900; letter-spacing: 0.08em; font-size: 12px; opacity: 0.9; }
+        .p1-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+        .p1-scan:before {
           content: "";
           position: absolute;
           inset: 0;
-          background:
-            repeating-linear-gradient(
-              to bottom,
-              rgba(156,255,176,0.055) 0px,
-              rgba(156,255,176,0.025) 1px,
-              rgba(0,0,0,0) 3px
-            ),
-            radial-gradient(110% 85% at 50% 35%,
-              rgba(156,255,176,0.08),
-              rgba(0,0,0,0) 55%),
-            radial-gradient(120% 95% at 50% 55%,
-              rgba(0,0,0,0) 35%,
-              rgba(0,0,0,0.62) 85%);
-          opacity: 0.9;
+          background: repeating-linear-gradient(
+            to bottom,
+            rgba(215,255,224,0.06) 0px,
+            rgba(215,255,224,0.03) 1px,
+            rgba(0,0,0,0) 3px
+          );
+          opacity: 0.35;
           pointer-events: none;
           mix-blend-mode: screen;
         }
-
-        .p1-panel.p1-crt:after {
-          content: "";
-          position: absolute;
-          inset: -40px;
-          background:
-            radial-gradient(closest-side, rgba(156,255,176,0.06), rgba(0,0,0,0) 65%),
-            repeating-linear-gradient(0deg,
-              rgba(255,255,255,0.00) 0px,
-              rgba(255,255,255,0.00) 6px,
-              rgba(255,255,255,0.015) 7px);
-          opacity: 0.22;
-          pointer-events: none;
-          animation: p1Flicker 6.5s infinite steps(1);
-        }
-
-        @keyframes p1Flicker {
-          0% { opacity: 0.20; transform: translateY(0px); }
-          2% { opacity: 0.28; }
-          3% { opacity: 0.17; }
-          7% { opacity: 0.24; transform: translateY(1px); }
-          11% { opacity: 0.19; }
-          12% { opacity: 0.27; }
-          60% { opacity: 0.21; transform: translateY(0px); }
-          61% { opacity: 0.26; }
-          62% { opacity: 0.18; }
-          100% { opacity: 0.20; transform: translateY(0px); }
-        }
-
-        .p1-title {
-          font-weight: 900;
-          letter-spacing: 0.10em;
-          font-size: 12px;
-          opacity: 0.95;
-          text-transform: uppercase;
-        }
-
-        .p1-mono, .p1-panel, .p1-btn, .p1-label, .p1-value {
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        }
-
-        /* Phosphor text glow */
-        .p1-panel, .p1-mono {
-          color: rgba(156,255,176,0.92);
-          text-shadow:
-            0 0 6px rgba(156,255,176,0.18),
-            0 0 14px rgba(156,255,176,0.10);
-        }
-
-        .p1-label { font-size: 12px; opacity: 0.82; }
-        .p1-value { font-size: 20px; font-weight: 900; }
-
         .p1-btn {
           padding: 10px;
-          border-radius: 12px;
-          border: 1px solid rgba(156,255,176,0.22);
-          background:
-            linear-gradient(180deg, rgba(10,14,12,0.60), rgba(3,5,4,0.70));
-          color: rgba(156,255,176,0.95);
-          box-shadow:
-            inset 0 0 0 1px rgba(0,0,0,0.55),
-            inset 0 -10px 18px rgba(0,0,0,0.55);
-          -webkit-tap-highlight-color: rgba(0,0,0,0);
-          user-select: none;
+          border-radius: 10px;
+          border: 1px solid rgba(215,255,224,0.18);
+          background: rgba(5,7,10,0.35);
+          color: inherit;
         }
-
-        .p1-btn:active {
-          transform: translateY(1px);
-          filter: brightness(1.12);
-          box-shadow:
-            inset 0 0 0 1px rgba(0,0,0,0.65),
-            inset 0 -6px 12px rgba(0,0,0,0.60);
-        }
-
         .p1-btn:disabled { opacity: 0.45; }
-
         .p1-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
-
         .p1-stat { min-width: 140px; }
-
+        .p1-label { font-size: 12px; opacity: 0.82; }
+        .p1-value { font-size: 20px; font-weight: 900; }
         .p1-bar {
           height: 10px;
           border-radius: 99px;
-          border: 1px solid rgba(156,255,176,0.18);
-          background: rgba(2,4,3,0.55);
+          border: 1px solid rgba(215,255,224,0.14);
+          background: rgba(5,7,10,0.35);
           overflow: hidden;
-          box-shadow: inset 0 0 10px rgba(0,0,0,0.70);
         }
-
         .p1-fill {
           height: 100%;
           width: 0%;
-          background:
-            linear-gradient(90deg, rgba(156,255,176,0.20), rgba(156,255,176,0.62));
-          box-shadow: 0 0 18px rgba(156,255,176,0.22);
+          background: rgba(215,255,224,0.55);
         }
-
         .p1-two {
           display:grid;
           grid-template-columns: 1fr 260px;
           gap: 12px;
         }
-        @media (max-width: 740px) { .p1-two { grid-template-columns: 1fr; } }
-
+        @media (max-width: 740px) {
+          .p1-two { grid-template-columns: 1fr; }
+        }
         .p1-logs {
           display:grid;
           grid-template-columns: 1fr 1fr;
           gap: 12px;
         }
-        @media (max-width: 740px) { .p1-logs { grid-template-columns: 1fr; } }
-
+        @media (max-width: 740px) {
+          .p1-logs { grid-template-columns: 1fr; }
+        }
         .p1-logbox {
           height: 180px;
           overflow: auto;
-          border-radius: 12px;
-          border: 1px solid rgba(156,255,176,0.16);
-          background: rgba(2,4,3,0.55);
+          border-radius: 10px;
+          border: 1px solid rgba(215,255,224,0.12);
+          background: rgba(5,7,10,0.30);
           padding: 10px;
           line-height: 1.35;
           font-size: 12px;
-          opacity: 0.94;
+          opacity: 0.92;
           white-space: pre-wrap;
-          box-shadow: inset 0 0 18px rgba(0,0,0,0.75);
         }
-
-        /* Scope & osc look like embedded CRT windows */
-        .p1-scopebox {
-          border-radius: 14px;
-          border: 1px solid rgba(156,255,176,0.16);
-          background: rgba(1,3,2,0.62);
-          padding: 10px;
-          box-shadow: inset 0 0 22px rgba(0,0,0,0.80);
+      
+        .p1-scopecanvas {
+          width: 100%;
+          height: 110px;
+          display:block;
+          border-radius: 12px;
         }
-
-        /* Subtle “tube curvature” */
-        .p1-curved {
-          border-radius: 18px;
+        .p1-osccanvas {
+          width: 100%;
+          height: 240px;
+          display:block;
+          border-radius: 12px;
+        }
+        @media (max-width: 740px){
+          .p1-osccanvas { height: 180px; }
         }
 </style>
 
-      <div class="p1-shell">
       <div style="max-width: 980px; margin: 0 auto; padding: 14px;">
-        <div class="p1-panel p1-crt">
+        <div class="p1-panel p1-scan">
           <div class="p1-row">
             <div>
               <div class="p1-label">Logged in as</div>
@@ -466,7 +368,7 @@ export default {
         </div>
 
         <div class="p1-grid" style="margin-top:12px;">
-          <div class="p1-panel p1-crt">
+          <div class="p1-panel p1-scan">
             <div class="p1-row">
               <div class="p1-stat">
                 <div class="p1-label">Signal</div>
@@ -497,18 +399,18 @@ export default {
           </div>
 
           <div class="p1-two">
-            <div class="p1-panel p1-crt">
+            <div class="p1-panel p1-scan">
               <div class="p1-title">SCOPE</div>
-              <div class="p1-scopebox p1-curved"><div id="scope" class="p1-mono" style="font-size:12px; opacity:0.92; white-space:pre;"></div></div>
+              <div class="p1-scopebox p1-curved"><div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;"><div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">SCOPE</div><div style="font-size:12px; opacity:0.75;">Flow</div></div><canvas id="scopeCanvas" class="p1-scopecanvas"></canvas></div>
             </div>
 
-            <div class="p1-panel p1-crt">
+            <div class="p1-panel p1-scan">
               <div class="p1-title">OSC</div>
-              <div class="p1-scopebox p1-curved"><div id="osc" class="p1-mono" style="font-size:12px; opacity:0.92; white-space:pre;"></div></div>
+              <div class="p1-scopebox p1-curved"><div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;"><div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">OSCILLOSCOPE</div><div style="font-size:12px; opacity:0.75;">Synchronicity <span id="syncPct">0</span>%</div></div><canvas id="oscCanvas" class="p1-osccanvas"></canvas></div>
             </div>
           </div>
 
-          <div class="p1-panel p1-crt">
+          <div class="p1-panel p1-scan">
             <div class="p1-title">UPGRADES</div>
             <div style="opacity:0.8; font-size:12px; margin-top:6px;">
               Buy systems to grow Signal and fight Corruption.
@@ -516,7 +418,7 @@ export default {
             <div id="shop" style="margin-top:10px; display:grid; gap:10px;"></div>
           </div>
 
-          <div class="p1-panel p1-crt">
+          <div class="p1-panel p1-scan">
             <div class="p1-title">COMMS + TRANSMISSION</div>
             <div class="p1-logs" style="margin-top:10px;">
               <div>
@@ -530,7 +432,7 @@ export default {
             </div>
           </div>
 
-          <div class="p1-panel p1-crt" style="display:${isDev ? "block" : "none"};">
+          <div class="p1-panel p1-scan" style="display:${isDev ? "block" : "none"};">
             <div class="p1-title">DEV</div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
               <button id="wipe" class="p1-btn">Wipe my save</button>
@@ -548,7 +450,7 @@ export default {
           </div>
 
           <div id="offlineOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.92); padding:14px;">
-            <div class="p1-panel p1-crt" style="max-width:720px; margin: 0 auto;">
+            <div class="p1-panel p1-scan" style="max-width:720px; margin: 0 auto;">
               <div class="p1-title">RETURN REPORT</div>
               <div id="offlineBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
               <button id="offlineAck" class="p1-btn" style="margin-top:12px; width:100%;">ACK</button>
@@ -556,7 +458,7 @@ export default {
           </div>
 
           <div id="defeatOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.94); padding:14px;">
-            <div class="p1-panel p1-crt" style="max-width:720px; margin: 0 auto;">
+            <div class="p1-panel p1-scan" style="max-width:720px; margin: 0 auto;">
               <div class="p1-title">SYSTEM FAILURE</div>
               <div id="defeatBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
               <button id="restart" class="p1-btn" style="margin-top:12px; width:100%;">RESTART PHASE</button>
@@ -564,7 +466,7 @@ export default {
           </div>
 
           <div id="winOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.94); padding:14px;">
-            <div class="p1-panel p1-crt" style="max-width:760px; margin: 0 auto;">
+            <div class="p1-panel p1-scan" style="max-width:760px; margin: 0 auto;">
               <div class="p1-title">STABILISATION ACHIEVED</div>
               <div id="winBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
               <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
@@ -576,7 +478,6 @@ export default {
 
         </div>
       </div>
-    </div>
     `;
 
     const $signal = root.querySelector("#signal");
@@ -587,7 +488,190 @@ export default {
     const $shop = root.querySelector("#shop");
     const $comms = root.querySelector("#commsBox");
     const $tx = root.querySelector("#txBox");
-    const $scope = root.querySelector("#scope");
+    
+    const $scopeCanvas = root.querySelector("#scopeCanvas");
+    const $oscCanvas = root.querySelector("#oscCanvas");
+    const $syncPct = root.querySelector("#syncPct");
+
+    // Transient visuals (not saved)
+    const vis = {
+      t: 0,
+      lastPingAt: 0,
+      shake: 0,
+    };
+
+    function sizeCanvas(c) {
+      if (!c) return;
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const rect = c.getBoundingClientRect();
+      const w = Math.max(10, Math.floor(rect.width * dpr));
+      const h = Math.max(10, Math.floor(rect.height * dpr));
+      if (c.width !== w || c.height !== h) {
+        c.width = w;
+        c.height = h;
+      }
+      const ctx = c.getContext("2d");
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.scale(dpr, dpr);
+      return { ctx, w: rect.width, h: rect.height };
+    }
+
+    function drawScope(p1, dt) {
+      if (!$scopeCanvas) return;
+      const s = sizeCanvas($scopeCanvas);
+      if (!s) return;
+      const { ctx, w, h } = s;
+
+      // Background
+      ctx.clearRect(0,0,w,h);
+      ctx.fillStyle = "rgba(1,3,2,0.15)";
+      ctx.fillRect(0,0,w,h);
+
+      // Grid
+      ctx.globalAlpha = 0.18;
+      ctx.strokeStyle = "rgba(156,255,176,0.35)";
+      ctx.lineWidth = 1;
+      const gx = 28, gy = 18;
+      for (let x=0; x<=w; x+=gx){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+      for (let y=0; y<=h; y+=gy){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+
+      // Parameters
+      const sps = p1.signalPerSecond || 0;
+      const corr = p1.corruption || 0;
+
+      // Base amplitude responds to SPS; corruption adds instability.
+      const amp = Math.min(1, 0.20 + (sps / 30) * 0.55 + (corr / 100) * 0.35);
+      const noise = (corr / 100) * 0.65;
+
+      // Ping “kick” makes a temporary spike/noise burst
+      const sincePing = (Date.now() - vis.lastPingAt) / 1000;
+      const kick = Math.max(0, 1 - sincePing * 4); // fades in ~0.25s
+      const kickAmp = kick * 0.25;
+
+      // Draw waveform
+      const mid = h * 0.5;
+      const A = (h * 0.40) * amp;
+      vis.t += dt * (0.8 + sps / 25); // speed scales with SPS
+
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "rgba(156,255,176,0.85)";
+      ctx.shadowColor = "rgba(156,255,176,0.35)";
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 1.6;
+
+      ctx.beginPath();
+      for (let x=0; x<w; x++) {
+        const u = x / w;
+        const base = Math.sin(vis.t + u * Math.PI * 4);
+        const wobble = Math.sin(vis.t * 0.8 + u * Math.PI * 10) * noise * 0.35;
+        const rnd = (Math.sin((vis.t*6) + u*80) + Math.sin((vis.t*9.2) + u*140)) * 0.5;
+        const n = rnd * noise * 0.10;
+        const y = mid + (base + wobble + n) * A + (base * A * kickAmp);
+        if (x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+
+      // Secondary trace (faint)
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.30;
+      ctx.strokeStyle = "rgba(156,255,176,0.55)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x=0; x<w; x++) {
+        const u = x / w;
+        const y = mid + Math.sin(vis.t*0.92 + u*Math.PI*3.6 + 0.8) * (A*0.55);
+        if (x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+
+      ctx.globalAlpha = 1;
+    }
+
+    function drawOsc(p1, dt) {
+      if (!$oscCanvas) return;
+      const s = sizeCanvas($oscCanvas);
+      if (!s) return;
+      const { ctx, w, h } = s;
+
+      ctx.clearRect(0,0,w,h);
+      ctx.fillStyle = "rgba(1,3,2,0.15)";
+      ctx.fillRect(0,0,w,h);
+
+      // Grid (circle-friendly)
+      ctx.globalAlpha = 0.18;
+      ctx.strokeStyle = "rgba(156,255,176,0.35)";
+      ctx.lineWidth = 1;
+      const step = 26;
+      for (let x=0; x<=w; x+=step){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+      for (let y=0; y<=h; y+=step){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+
+      // Synchronicity: based on progress toward Phase 1 signal win threshold (12,000 by default)
+      const winSignal = 12000;
+      const sync = Math.max(0, Math.min(100, (p1.signal / winSignal) * 100));
+      if ($syncPct) $syncPct.textContent = String(Math.floor(sync));
+
+      // Phase offset transitions toward 90° at 100% (perfect circle)
+      const corr = p1.corruption || 0;
+      const chaos = (corr / 100) * 0.8;
+
+      const sync01 = sync / 100;
+      const targetPhi = Math.PI / 2; // 90°
+      // Start chaotic: phi wanders; as sync increases, phi locks.
+      const wander = (Math.sin(vis.t*0.7)*0.9 + Math.sin(vis.t*1.3)*0.4) * (1 - sync01);
+      const phi = targetPhi + wander;
+
+      // Slight distortion from corruption
+      const distort = 1 + chaos * 0.25;
+
+      const cx = w * 0.5, cy = h * 0.52;
+      const R = Math.min(w,h) * 0.36;
+
+      vis.t += dt * 0.6;
+
+      ctx.strokeStyle = "rgba(156,255,176,0.88)";
+      ctx.shadowColor = "rgba(156,255,176,0.35)";
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 1.4;
+
+      ctx.beginPath();
+      const pts = 900;
+      for (let i=0; i<=pts; i++) {
+        const t = (i/pts) * Math.PI * 2;
+        const x = Math.sin(t * distort);
+        const y = Math.sin((t * distort) + phi);
+
+        // corruption adds jitter
+        const jx = (Math.sin(t*17 + vis.t*5) * chaos) * 0.04;
+        const jy = (Math.cos(t*19 + vis.t*6) * chaos) * 0.04;
+
+        const px = cx + (x + jx) * R;
+        const py = cy + (y + jy) * R;
+
+        if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+
+      // Reticle
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = "rgba(156,255,176,0.55)";
+      ctx.beginPath();
+      ctx.arc(cx,cy,R,0,Math.PI*2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy);
+      ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // Resize canvases on layout changes
+    const onResize = () => { sizeCanvas($scopeCanvas); sizeCanvas($oscCanvas); };
+    window.addEventListener("resize", onResize);
+
+const $scope = root.querySelector("#scope");
     const $osc = root.querySelector("#osc");
     const $hint = root.querySelector("#hint");
 
@@ -688,6 +772,24 @@ export default {
       api.setState(st);
       api.saveSoon();
       render();
+
+    // Smooth scope rendering (cheap, battery-friendly)
+    let lastFrame = performance.now();
+    let rafId = 0;
+    const frame = (t) => {
+      const dt = Math.min(0.05, (t - lastFrame) / 1000);
+      lastFrame = t;
+
+      const st = api.getState();
+      const p1 = st.phases.phase1;
+
+      // Draw at ~30fps by skipping alternate frames on slow devices
+      drawScope(p1, dt);
+      drawOsc(p1, dt);
+
+      rafId = requestAnimationFrame(frame);
+    };
+    rafId = requestAnimationFrame(frame);
     }
 
     function doPurge() {
@@ -962,7 +1064,7 @@ function render() {
       render();
     }, 500);
 
-    this._cleanup = () => clearInterval(repaint);
+    this._cleanup = () => { clearInterval(repaint); cancelAnimationFrame(rafId); window.removeEventListener('resize', onResize); };
   },
 
   unmount() {

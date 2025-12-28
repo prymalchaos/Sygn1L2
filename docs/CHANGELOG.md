@@ -108,3 +108,12 @@
 ### Fixed
 - iOS: press-and-hold Ping no longer selects the "PING" label (prevents input disruption).
 
+## [2025-12-29d] - 2025-12-29
+### Added
+- Phase 1: press-and-hold Ping auto-ping (scales with Ping Boost).
+- docs/FEATURE_LOCK.md and refreshed docs/AUDIT.md.
+### Fixed
+- iOS long-press selecting “PING” text (disabled selection + preventDefault on pointerdown).
+### Changed
+- Phase 1 scope ping interference spike strengthened.
+

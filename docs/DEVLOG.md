@@ -273,3 +273,23 @@
 **Files touched**
 - src/plugins/phase1/plugin.js
 - src/core/pluginLoader.js (BUILD bump)
+
+
+## 2025-12-29 (Sydney) – Audit + iOS hold-to-ping fix + scope spike
+**Fix**
+- Prevent iOS long-press text selection/callout on Ping by disabling selection and using non-passive pointerdown with preventDefault.
+- Implemented press-and-hold auto-ping (rate scales with Ping Boost) while preserving tap behavior.
+
+**Visuals**
+- Scope amplitude spike strengthened during ping/hold (uses vis.lastPingAt + vis.shake).
+
+**Maintenance**
+- Regenerated docs/AUDIT.md against current codebase and added docs/FEATURE_LOCK.md.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js + src/pluginLoader.js (BUILD bump)
+- docs/AUDIT.md
+- docs/FEATURE_LOCK.md
+- docs/DEVLOG.md
+- docs/CHANGELOG.md

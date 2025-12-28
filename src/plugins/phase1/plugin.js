@@ -34,6 +34,8 @@ function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
 }
 
+let _popupHook = null; // set by phase UI
+
 function nowStamp() {
   const d = new Date();
   const hh = String(d.getHours()).padStart(2, "0");
@@ -42,10 +44,32 @@ function nowStamp() {
   return `${hh}:${mm}:${ss}`;
 }
 
+
+function maybePopupFromLine(line) {
+  if (!_popupHook) return;
+  // Format: SPEAKER//POPUP  message...
+  const m = String(line).match(/^([A-Z0-9 _-]{2,18})\/\/\s*POPUP\s+(.*)$/i);
+  if (m) {
+    const speaker = m[1].trim().toUpperCase();
+    const msg = m[2].trim();
+    _popupHook(speaker, msg);
+    return;
+  }
+  // Also allow: SPEAKER//NOTE ... (milestones)
+  const m2 = String(line).match(/^([A-Z0-9 _-]{2,18})\/\/[A-Z]+\s+(.*)$/i);
+  if (m2) {
+    const speaker = m2[1].trim().toUpperCase();
+    const msg = m2[2].trim();
+    _popupHook(speaker, msg);
+  }
+}
+
 function pushLog(arr, line, max = 60) {
   arr.push(`[${nowStamp()}] ${line}`);
   while (arr.length > max) arr.shift();
 }
+  maybePopupFromLine(line);
+
 
 
 function fireMilestone(p1, key, channel, line) {
@@ -446,10 +470,45 @@ p1.flags ??= {};
           box-shadow: inset 0 0 22px rgba(0,0,0,0.80);
         }
         .p1-curved{ border-radius: 18px; }
+
+        #popupRail{
+          position: sticky;
+          top: 10px;
+          z-index: 9999;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin-bottom: 10px;
+          pointer-events: none;
+        }
+        .p1-popup{
+          pointer-events: auto;
+          display:flex;
+          gap:10px;
+          align-items:flex-start;
+          padding: 10px 12px;
+          border-radius: 14px;
+          border: 1px solid rgba(156,255,176,0.22);
+          background: rgba(2,4,3,0.72);
+          box-shadow: inset 0 0 22px rgba(0,0,0,0.70), 0 12px 26px rgba(0,0,0,0.45);
+        }
+        .p1-popup .p1-badge{
+          width: 28px;
+          height: 28px;
+          flex: 0 0 28px;
+          border-radius: 8px;
+          border: 1px solid rgba(156,255,176,0.18);
+          background: rgba(1,3,2,0.65);
+          box-shadow: inset 0 0 14px rgba(0,0,0,0.65);
+        }
+        .p1-popup .p1-popmeta{ display:flex; flex-direction:column; gap:2px; }
+        .p1-popup .p1-popspeaker{ font-weight:900; letter-spacing:0.10em; font-size:12px; opacity:0.92; }
+        .p1-popup .p1-popmsg{ font-size:12px; opacity:0.86; line-height:1.25; }
 </style>
 
       <div class="p1-shell">
       <div style="max-width: 980px; margin: 0 auto; padding: 14px;">
+        <div id="popupRail"></div>
         <div class="p1-panel p1-crt">
           <div class="p1-row">
             <div>
@@ -586,6 +645,127 @@ p1.flags ??= {};
     const $corrText = root.querySelector("#corrText");
     const $shop = root.querySelector("#shop");
     const $comms = root.querySelector("#commsBox");
+
+    const $popupRail = root.querySelector("#popupRail");
+    const popState = { items: [], max: 3 };
+
+    function hash32(str) {
+      let h = 2166136261 >>> 0;
+      for (let i=0;i<str.length;i++){
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+
+    function drawBadge(canvas, seedStr) {
+      const c = canvas;
+      const ctx = c.getContext("2d");
+      const seed = hash32(seedStr);
+      // pixel grid 8x8 inside 24x24
+      const W = 24, H = 24;
+      c.width = W; c.height = H;
+      ctx.clearRect(0,0,W,H);
+
+      // background
+      ctx.fillStyle = "rgba(1,3,2,0.95)";
+      ctx.fillRect(0,0,W,H);
+
+      // border glow
+      ctx.strokeStyle = "rgba(156,255,176,0.35)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5,0.5,W-1,H-1);
+
+      // deterministic PRNG
+      let s = seed || 1;
+      const rnd = () => {
+        s = (Math.imul(1664525, s) + 1013904223) >>> 0;
+        return (s >>> 8) / 16777216;
+      };
+
+      const fg = "rgba(156,255,176,0.92)";
+      const mid = "rgba(156,255,176,0.55)";
+
+      // face mask (symmetrical)
+      const px = 2, py = 2, cell = 2; // 8x8 => 16x16 area
+      for (let y=0;y<8;y++){
+        for (let x=0;x<4;x++){
+          const r = rnd();
+          const on = r > 0.55;
+          const shade = r > 0.82 ? fg : mid;
+          if (on){
+            ctx.fillStyle = shade;
+            ctx.fillRect(px + x*cell, py + y*cell, cell, cell);
+            ctx.fillRect(px + (7-x)*cell, py + y*cell, cell, cell);
+          }
+        }
+      }
+
+      // “visor” band
+      ctx.fillStyle = "rgba(1,3,2,0.70)";
+      ctx.fillRect(2, 8, 20, 4);
+      ctx.fillStyle = "rgba(156,255,176,0.45)";
+      ctx.fillRect(3, 9, 18, 2);
+
+      // little ID dot
+      ctx.fillStyle = "rgba(156,255,176,0.65)";
+      ctx.fillRect(18, 18, 3, 3);
+
+      // phosphor bloom
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = "rgba(156,255,176,0.35)";
+      ctx.fillRect(1,1,W-2,H-2);
+      ctx.globalAlpha = 1;
+    }
+
+    function showPopup(speaker, msg) {
+      if (!$popupRail) return;
+
+      const el = document.createElement("div");
+      el.className = "p1-popup";
+
+      const badge = document.createElement("canvas");
+      badge.className = "p1-badge";
+      drawBadge(badge, speaker);
+
+      const meta = document.createElement("div");
+      meta.className = "p1-popmeta";
+
+      const sp = document.createElement("div");
+      sp.className = "p1-popspeaker";
+      sp.textContent = speaker;
+
+      const ms = document.createElement("div");
+      ms.className = "p1-popmsg";
+      ms.textContent = msg;
+
+      meta.appendChild(sp);
+      meta.appendChild(ms);
+
+      el.appendChild(badge);
+      el.appendChild(meta);
+
+      el.addEventListener("click", () => el.remove());
+
+      // queue
+      $popupRail.prepend(el);
+      popState.items.unshift(el);
+
+      while (popState.items.length > popState.max) {
+        const old = popState.items.pop();
+        if (old && old.remove) old.remove();
+      }
+
+      setTimeout(() => {
+        if (el && el.parentNode) el.remove();
+        popState.items = popState.items.filter(x => x !== el);
+      }, 3200);
+    }
+
+    // wire popup hook for pushLog/fireMilestone
+    _popupHook = (speaker, msg) => showPopup(speaker, msg);
+
+
     const $tx = root.querySelector("#txBox");
     
     const $scopeCanvas = root.querySelector("#scopeCanvas");
@@ -1260,7 +1440,8 @@ if (p1.isDefeated) {
       render();
     }, 500);
 
-    this._cleanup = () => { clearInterval(repaint); cancelAnimationFrame(rafId); window.removeEventListener('resize', onResize); };
+    this._cleanup = () => {
+      _popupHook = null; clearInterval(repaint); cancelAnimationFrame(rafId); window.removeEventListener('resize', onResize); };
   },
 
   unmount() {

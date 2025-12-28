@@ -349,10 +349,106 @@ export default {
         @media (max-width: 740px){
           .p1-osccanvas { height: 180px; }
         }
+
+
+        :root { color-scheme: dark; }
+        .p1-shell{
+          background:
+            radial-gradient(1200px 700px at 30% 20%, rgba(120,140,130,0.18), rgba(0,0,0,0) 55%),
+            radial-gradient(900px 700px at 80% 70%, rgba(80,100,90,0.14), rgba(0,0,0,0) 60%),
+            repeating-linear-gradient(90deg,
+              rgba(255,255,255,0.05) 0px,
+              rgba(255,255,255,0.00) 2px,
+              rgba(0,0,0,0.06) 6px),
+            linear-gradient(180deg, rgba(15,18,18,0.95), rgba(6,8,7,0.98));
+          min-height: 100vh;
+        }
+
+        .p1-panel{
+          border: 1px solid rgba(156,255,176,0.18);
+          border-radius: 14px;
+          background: rgba(6, 10, 8, 0.68);
+          padding: 12px;
+          position: relative;
+          overflow: hidden;
+          box-shadow:
+            inset 0 0 0 1px rgba(0,0,0,0.50),
+            inset 0 0 24px rgba(0,0,0,0.65),
+            0 10px 30px rgba(0,0,0,0.45);
+          backdrop-filter: blur(2px);
+          color: rgba(156,255,176,0.92);
+          text-shadow:
+            0 0 6px rgba(156,255,176,0.18),
+            0 0 14px rgba(156,255,176,0.10);
+        }
+
+        .p1-panel.p1-crt:before{
+          content:"";
+          position:absolute; inset:0;
+          background:
+            repeating-linear-gradient(to bottom,
+              rgba(156,255,176,0.055) 0px,
+              rgba(156,255,176,0.025) 1px,
+              rgba(0,0,0,0) 3px
+            ),
+            radial-gradient(110% 85% at 50% 35%,
+              rgba(156,255,176,0.08),
+              rgba(0,0,0,0) 55%),
+            radial-gradient(120% 95% at 50% 55%,
+              rgba(0,0,0,0) 35%,
+              rgba(0,0,0,0.62) 85%);
+          opacity:0.9;
+          pointer-events:none;
+          mix-blend-mode:screen;
+        }
+        .p1-panel.p1-crt:after{
+          content:"";
+          position:absolute; inset:-40px;
+          background:
+            radial-gradient(closest-side, rgba(156,255,176,0.06), rgba(0,0,0,0) 65%),
+            repeating-linear-gradient(0deg,
+              rgba(255,255,255,0.00) 0px,
+              rgba(255,255,255,0.00) 6px,
+              rgba(255,255,255,0.015) 7px);
+          opacity:0.22;
+          pointer-events:none;
+          animation:p1Flicker 6.5s infinite steps(1);
+        }
+        @keyframes p1Flicker{
+          0%{opacity:0.20; transform:translateY(0px);}
+          2%{opacity:0.28;}
+          3%{opacity:0.17;}
+          7%{opacity:0.24; transform:translateY(1px);}
+          11%{opacity:0.19;}
+          12%{opacity:0.27;}
+          60%{opacity:0.21; transform:translateY(0px);}
+          61%{opacity:0.26;}
+          62%{opacity:0.18;}
+          100%{opacity:0.20; transform:translateY(0px);}
+        }
+
+        .p1-btn{
+          border:1px solid rgba(156,255,176,0.22);
+          background: linear-gradient(180deg, rgba(10,14,12,0.60), rgba(3,5,4,0.70));
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.55), inset 0 -10px 18px rgba(0,0,0,0.55);
+          -webkit-tap-highlight-color: rgba(0,0,0,0);
+          user-select:none;
+        }
+        .p1-btn:active{ transform: translateY(1px); filter: brightness(1.12); }
+
+        .p1-scopebox{
+          border-radius: 14px;
+          border: 1px solid rgba(156,255,176,0.16);
+          background: rgba(1,3,2,0.62);
+          padding: 10px;
+          box-shadow: inset 0 0 22px rgba(0,0,0,0.80);
+        }
+        .p1-curved{ border-radius: 18px; }
 </style>
 
+      <div class="p1-shell">
       <div style="max-width: 980px; margin: 0 auto; padding: 14px;">
-        <div class="p1-panel p1-scan">
+        <div class="p1-panel p1-crt">
           <div class="p1-row">
             <div>
               <div class="p1-label">Logged in as</div>
@@ -368,7 +464,7 @@ export default {
         </div>
 
         <div class="p1-grid" style="margin-top:12px;">
-          <div class="p1-panel p1-scan">
+          <div class="p1-panel p1-crt">
             <div class="p1-row">
               <div class="p1-stat">
                 <div class="p1-label">Signal</div>
@@ -399,18 +495,18 @@ export default {
           </div>
 
           <div class="p1-two">
-            <div class="p1-panel p1-scan">
+            <div class="p1-panel p1-crt">
               <div class="p1-title">SCOPE</div>
               <div class="p1-scopebox p1-curved"><div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;"><div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">SCOPE</div><div style="font-size:12px; opacity:0.75;">Flow</div></div><canvas id="scopeCanvas" class="p1-scopecanvas"></canvas></div>
             </div>
 
-            <div class="p1-panel p1-scan">
+            <div class="p1-panel p1-crt">
               <div class="p1-title">OSC</div>
               <div class="p1-scopebox p1-curved"><div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;"><div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">OSCILLOSCOPE</div><div style="font-size:12px; opacity:0.75;">Synchronicity <span id="syncPct">0</span>%</div></div><canvas id="oscCanvas" class="p1-osccanvas"></canvas></div>
             </div>
           </div>
 
-          <div class="p1-panel p1-scan">
+          <div class="p1-panel p1-crt">
             <div class="p1-title">UPGRADES</div>
             <div style="opacity:0.8; font-size:12px; margin-top:6px;">
               Buy systems to grow Signal and fight Corruption.
@@ -418,7 +514,7 @@ export default {
             <div id="shop" style="margin-top:10px; display:grid; gap:10px;"></div>
           </div>
 
-          <div class="p1-panel p1-scan">
+          <div class="p1-panel p1-crt">
             <div class="p1-title">COMMS + TRANSMISSION</div>
             <div class="p1-logs" style="margin-top:10px;">
               <div>
@@ -432,7 +528,7 @@ export default {
             </div>
           </div>
 
-          <div class="p1-panel p1-scan" style="display:${isDev ? "block" : "none"};">
+          <div class="p1-panel p1-crt" style="display:${isDev ? "block" : "none"};">
             <div class="p1-title">DEV</div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
               <button id="wipe" class="p1-btn">Wipe my save</button>
@@ -450,7 +546,7 @@ export default {
           </div>
 
           <div id="offlineOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.92); padding:14px;">
-            <div class="p1-panel p1-scan" style="max-width:720px; margin: 0 auto;">
+            <div class="p1-panel p1-crt" style="max-width:720px; margin: 0 auto;">
               <div class="p1-title">RETURN REPORT</div>
               <div id="offlineBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
               <button id="offlineAck" class="p1-btn" style="margin-top:12px; width:100%;">ACK</button>
@@ -458,7 +554,7 @@ export default {
           </div>
 
           <div id="defeatOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.94); padding:14px;">
-            <div class="p1-panel p1-scan" style="max-width:720px; margin: 0 auto;">
+            <div class="p1-panel p1-crt" style="max-width:720px; margin: 0 auto;">
               <div class="p1-title">SYSTEM FAILURE</div>
               <div id="defeatBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
               <button id="restart" class="p1-btn" style="margin-top:12px; width:100%;">RESTART PHASE</button>
@@ -466,7 +562,7 @@ export default {
           </div>
 
           <div id="winOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.94); padding:14px;">
-            <div class="p1-panel p1-scan" style="max-width:760px; margin: 0 auto;">
+            <div class="p1-panel p1-crt" style="max-width:760px; margin: 0 auto;">
               <div class="p1-title">STABILISATION ACHIEVED</div>
               <div id="winBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
               <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
@@ -478,6 +574,7 @@ export default {
 
         </div>
       </div>
+    </div>
     `;
 
     const $signal = root.querySelector("#signal");
@@ -573,6 +670,14 @@ export default {
       vis.t += dt * (0.8 + sps / 25); // speed scales with SPS
 
       ctx.globalAlpha = 1;
+
+      // Debug label (helps confirm canvas is alive)
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = "rgba(156,255,176,0.85)";
+      ctx.font = "12px ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace";
+      ctx.fillText(`SCOPE ${Math.floor(w)}x${Math.floor(h)}`, 10, 18);
+      ctx.restore();
       ctx.strokeStyle = "rgba(156,255,176,0.85)";
       ctx.shadowColor = "rgba(156,255,176,0.35)";
       ctx.shadowBlur = 10;
@@ -1037,7 +1142,11 @@ function render() {
 
       renderShop();
 
-      $comms.textContent = (p1.comms || []).join("\n");
+      
+      // Ensure scopes render even if RAF is throttled on mobile
+      drawScope(p1, 0.016);
+      drawOsc(p1, 0.016);
+$comms.textContent = (p1.comms || []).join("\n");
       $tx.textContent = (p1.transmission || []).join("\n");
 
       // Telemetry (dev-only)

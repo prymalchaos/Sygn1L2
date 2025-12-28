@@ -53,3 +53,7 @@
 ### Changed
 - Plugin loader BUILD bumped for cache-busting.
 
+## [2025-12-28i] - 2025-12-28
+### Fixed
+- Phase 1 render crash after replacing scope/osc with canvases (legacy text scope update is now guarded).
+

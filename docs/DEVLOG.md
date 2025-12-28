@@ -150,3 +150,13 @@
 1. Load Phase 1 (?v=scopes1).
 2. Watch scope waveform respond to SPS changes and corruption.
 3. Observe oscilloscope tighten as Signal approaches 12,000.
+
+
+## 2025-12-28 (Sydney) – Phase 1 scopes hotfix (prevent null scope crash)
+**Fix**
+- The old text-based scope renderer still ran after switching to canvas, and crashed because #scope/#osc no longer exist.
+- Guarded the legacy scope text update so Phase 1 render loop and tick never halt.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js (BUILD bump)

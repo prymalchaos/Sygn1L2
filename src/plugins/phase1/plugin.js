@@ -94,55 +94,6 @@ function attachFastTap(el, handler) {
   );
 }
 
-function attachHoldPing(btn, doPing, getRate) {
-  if (!btn) return () => {};
-  let holding = false;
-  let timer = 0;
-
-  const stop = () => {
-    holding = false;
-    vis.holdPing = false;
-    vis.holdPower = 0;
-    if (timer) clearInterval(timer);
-    timer = 0;
-  };
-
-  const start = (e) => {
-    // ignore right-click/secondary pointers
-    if (holding) return;
-    holding = true;
-    vis.holdPing = true;
-    vis.holdPower = 1;
-
-    try { btn.setPointerCapture?.(e.pointerId); } catch {}
-    // immediate ping for responsiveness
-    doPing(true);
-
-    const rate = Math.max(1, getRate());           // pings/sec
-    const interval = Math.max(20, Math.floor(1000 / rate)); // clamp for sanity
-
-    timer = setInterval(() => {
-      if (!holding) return;
-      doPing(true);
-      // keep scope "charged" while holding
-      vis.holdPower = Math.min(1.0, vis.holdPower + 0.08);
-    }, interval);
-  };
-
-  btn.style.touchAction = "manipulation";
-
-  btn.addEventListener("pointerdown", start, { passive: true });
-  btn.addEventListener("pointerup", stop, { passive: true });
-  btn.addEventListener("pointercancel", stop, { passive: true });
-  btn.addEventListener("pointerleave", stop, { passive: true });
-
-  // safety: if page visibility changes, stop holding
-  document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
-
-  return stop;
-}
-
-
 
 function fireMilestone(p1, key, channel, line) {
   p1.flags ??= {};
@@ -414,7 +365,10 @@ p1.flags ??= {};
           border: 1px solid rgba(215,255,224,0.18);
           background: rgba(5,7,10,0.35);
           color: inherit;
-        }
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
         .p1-btn:disabled { opacity: 0.45; }
         .p1-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
         .p1-stat { min-width: 140px; }
@@ -917,13 +871,10 @@ p1.flags ??= {};
 
     // Transient visuals (not saved)
     const vis = {
-t: 0,
+      t: 0,
       lastPingAt: 0,
       shake: 0,
-      holdPing: false,
-      holdPower: 0,
-      pingSpike: 0,
-      };
+    };
 
     function sizeCanvas(c) {
       if (!c) return;
@@ -992,11 +943,6 @@ t: 0,
       const kick = Math.max(0, 1 - sincePing * 4); // fades in ~0.25s
       const kickAmp = kick * 0.25;
 
-      const spike = Math.max(0, vis.pingSpike || 0);
-      const hold = vis.holdPing ? (0.35 + 0.35 * (vis.holdPower || 0)) : 0;
-      const spikeAmp = spike * 0.35 + hold;
-
-
       // Draw waveform
       const mid = h * 0.5;
       const A = (h * 0.40) * amp;
@@ -1023,7 +969,7 @@ t: 0,
         const wobble = Math.sin(vis.t * 0.8 + u * Math.PI * 10) * noise * 0.35;
         const rnd = (Math.sin((vis.t*6) + u*80) + Math.sin((vis.t*9.2) + u*140)) * 0.5;
         const n = rnd * noise * 0.10;
-        const y = mid + (base + wobble + n) * (A * (1 + spikeAmp)) + (base * A * kickAmp);
+        const y = mid + (base + wobble + n) * A + (base * A * kickAmp);
         if (x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
       }
       ctx.stroke();
@@ -1081,11 +1027,6 @@ t: 0,
       const corr = p1.corruption || 0;
       const chaos = (corr / 100) * 0.8;
 
-      const spike = Math.max(0, vis.pingSpike || 0);
-      const hold = vis.holdPing ? 0.25 : 0;
-      const jitterBoost = spike * 0.6 + hold * 0.35;
-
-
       const sync01 = sync / 100;
       const targetPhi = Math.PI / 2; // 90°
       // Start chaotic: phi wanders; as sync increases, phi locks.
@@ -1113,8 +1054,8 @@ t: 0,
         const y = Math.sin((t * distort) + phi);
 
         // corruption adds jitter
-        const jx = (Math.sin(t*17 + vis.t*5) * (chaos + jitterBoost)) * 0.04;
-        const jy = (Math.cos(t*19 + vis.t*6) * (chaos + jitterBoost)) * 0.04;
+        const jx = (Math.sin(t*17 + vis.t*5) * chaos) * 0.04;
+        const jy = (Math.cos(t*19 + vis.t*6) * chaos) * 0.04;
 
         const px = cx + (x + jx) * R;
         const py = cy + (y + jy) * R;
@@ -1254,18 +1195,7 @@ const $scope = root.querySelector("#scope");
       const dt = Math.min(0.05, (t - lastFrame) / 1000);
       lastFrame = t;
 
-      
-
-      // Visual spike decay (scope reacts to ping/hold)
-      if (vis.pingSpike) {
-        vis.pingSpike = Math.max(0, vis.pingSpike - dt * 6.0);
-      }
-      if (vis.holdPing) {
-        vis.holdPower = Math.min(1.0, (vis.holdPower || 0) + dt * 2.0);
-      } else {
-        vis.holdPower = Math.max(0, (vis.holdPower || 0) - dt * 4.0);
-      }
-const st = api.getState();
+      const st = api.getState();
       const p1 = st.phases.phase1;
 
       // Draw at ~30fps by skipping alternate frames on slow devices

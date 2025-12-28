@@ -1,39 +1,3 @@
-
-    function formatMs(ms) {
-      if (ms == null) return "--:--.-";
-      const total = Math.max(0, Math.floor(ms));
-      const m = Math.floor(total / 60000);
-      const s = Math.floor((total % 60000) / 1000);
-      const t = Math.floor((total % 1000) / 100);
-      return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${t}`;
-    }
-
-    async function showLeaderboard(mode) {
-      const overlay = root.querySelector("#lbOverlay") || root.querySelector("#leaderboardOverlay");
-      if (!overlay) {
-        pushLog(api.getState().phases.phase1.comms, "CONTROL//ERR  Leaderboard UI missing.");
-        return;
-      }
-      overlay.style.display = "block";
-
-      const globalBox = overlay.querySelector("#lbGlobal");
-      const mineBox = overlay.querySelector("#lbMine");
-      if (globalBox) globalBox.style.display = (mode === "global") ? "block" : "none";
-      if (mineBox) mineBox.style.display = (mode === "mine") ? "block" : "none";
-
-      // Refresh data whenever opened
-      try { await refreshLeaderboards(); } catch (e) {}
-    }
-
-
-
-    // Leaderboard buttons (bottom)
-    attachFastTap(root.querySelector("#lbGlobalBtn"), () => {
-      showLeaderboard("global");
-    });
-    attachFastTap(root.querySelector("#lbMineBtn"), () => {
-      showLeaderboard("mine");
-    });
 import { wipeMySave } from "../../core/save.js";
 import { createDefaultState } from "../../core/state.js";
 
@@ -302,6 +266,33 @@ export default {
   id: "phase1",
 
   mount(root, api) {
+
+    // Time trial / leaderboard helpers (scoped to Phase 1 mount)
+    function formatMs(ms) {
+      if (ms == null) return "--:--.-";
+      const total = Math.max(0, Math.floor(ms));
+      const m = Math.floor(total / 60000);
+      const s = Math.floor((total % 60000) / 1000);
+      const t = Math.floor((total % 1000) / 100);
+      return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${t}`;
+    }
+
+    async function showLeaderboard(mode) {
+      const overlay = root.querySelector("#lbOverlay") || root.querySelector("#leaderboardOverlay");
+      if (!overlay) {
+        pushLog(api.getState().phases.phase1.comms, "CONTROL//ERR  Leaderboard UI missing.");
+        return;
+      }
+      overlay.style.display = "block";
+
+      const globalBox = overlay.querySelector("#lbGlobal");
+      const mineBox = overlay.querySelector("#lbMine");
+      if (globalBox) globalBox.style.display = (mode === "global") ? "block" : "none";
+      if (mineBox) mineBox.style.display = (mode === "mine") ? "block" : "none";
+
+      try { await refreshLeaderboards(); } catch (e) {}
+    }
+
     const profile = api.getProfile();
     const isDev = profile?.username === "PrymalChaos" || profile?.role === "admin";
 
@@ -723,6 +714,12 @@ p1.flags ??= {};
       </div>
     </div>
     `;
+
+
+    // Bottom leaderboard buttons
+    attachFastTap(root.querySelector("#lbGlobalBtn"), () => showLeaderboard("global"));
+    attachFastTap(root.querySelector("#lbMineBtn"), () => showLeaderboard("mine"));
+
 
     const $signal = root.querySelector("#signal");
     const $sps = root.querySelector("#sps");

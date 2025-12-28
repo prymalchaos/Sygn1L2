@@ -1,3 +1,39 @@
+
+    function formatMs(ms) {
+      if (ms == null) return "--:--.-";
+      const total = Math.max(0, Math.floor(ms));
+      const m = Math.floor(total / 60000);
+      const s = Math.floor((total % 60000) / 1000);
+      const t = Math.floor((total % 1000) / 100);
+      return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${t}`;
+    }
+
+    async function showLeaderboard(mode) {
+      const overlay = root.querySelector("#lbOverlay") || root.querySelector("#leaderboardOverlay");
+      if (!overlay) {
+        pushLog(api.getState().phases.phase1.comms, "CONTROL//ERR  Leaderboard UI missing.");
+        return;
+      }
+      overlay.style.display = "block";
+
+      const globalBox = overlay.querySelector("#lbGlobal");
+      const mineBox = overlay.querySelector("#lbMine");
+      if (globalBox) globalBox.style.display = (mode === "global") ? "block" : "none";
+      if (mineBox) mineBox.style.display = (mode === "mine") ? "block" : "none";
+
+      // Refresh data whenever opened
+      try { await refreshLeaderboards(); } catch (e) {}
+    }
+
+
+
+    // Leaderboard buttons (bottom)
+    attachFastTap(root.querySelector("#lbGlobalBtn"), () => {
+      showLeaderboard("global");
+    });
+    attachFastTap(root.querySelector("#lbMineBtn"), () => {
+      showLeaderboard("mine");
+    });
 import { wipeMySave } from "../../core/save.js";
 import { createDefaultState } from "../../core/state.js";
 
@@ -263,7 +299,9 @@ export default {
     p1.comms ??= [];
     p1.transmission ??= [];
     p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
-        p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0, submittedRunId: null };
+            p1.run ??= { state: "running", startedAt: null, completedAt: null };
+    if (!p1.run.startedAt) p1.run.startedAt = p1.bootedAt || Date.now();
+p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0, submittedRunId: null };
     p1.win ??= { achieved: false, handled: false, achievedAt: null };
 p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
@@ -551,6 +589,18 @@ p1.flags ??= {};
               <button id="purge" class="p1-btn" style="flex:1; min-width:160px;">Purge</button>
             </div>
             <div id="hint" style="margin-top:8px; font-size:12px; opacity:0.85;"></div>
+          </div>
+
+          <div class="p1-panel p1-crt" style="margin-top:12px;">
+            <div class="p1-row" style="justify-content:space-between;">
+              <div class="p1-title">TIME TRIAL</div>
+              <div class="p1-label" style="opacity:0.75;">PHASE 1</div>
+            </div>
+            <div class="p1-row" style="margin-top:8px; gap:12px;">
+              <div class="p1-stat"><div class="p1-label">RUN</div><div class="p1-value" id="ttRun">00:00.0</div></div>
+              <div class="p1-stat"><div class="p1-label">LAST</div><div class="p1-value" id="ttLast">--:--.-</div></div>
+              <div class="p1-stat"><div class="p1-label">BEST</div><div class="p1-value" id="ttBest">--:--.-</div></div>
+            </div>
           </div>
 
           <div class="p1-two">
@@ -1316,6 +1366,9 @@ const $scope = root.querySelector("#scope");
         upgrades: { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0, autopilotCore: 0 },
         autopilot: { unlocked: (old.autopilot?.unlocked || false), enabled: false, targetCorruption: 40, budgetFraction: 0.35, offlineCap: 95 },
         timeTrial: { bestMs: keepBest ?? null, lastMs: null, runId: (old.timeTrial.runId || 0) + 1 },
+
+        run: { state: "running", startedAt: now, completedAt: null },
+
         win: { achieved: false, handled: false, achievedAt: null },
         comms: [],
         transmission: [],
@@ -1459,6 +1512,27 @@ function maybeWarn(p1) {
     }
 
 
+
+    function renderTimeTrial(p1) {
+      const runEl = root.querySelector("#ttRun");
+      const lastEl = root.querySelector("#ttLast");
+      const bestEl = root.querySelector("#ttBest");
+      if (!runEl) return;
+      p1.run ??= { state: "running", startedAt: (p1.bootedAt || Date.now()), completedAt: null };
+      p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0, submittedRunId: null };
+
+      const now = Date.now();
+      let runMs = 0;
+      if (p1.run.state === "completed" && p1.run.completedAt) {
+        runMs = Math.max(0, p1.run.completedAt - (p1.run.startedAt || p1.bootedAt || p1.run.completedAt));
+      } else {
+        runMs = Math.max(0, now - (p1.run.startedAt || p1.bootedAt || now));
+      }
+
+      runEl.textContent = formatMs(runMs);
+      if (lastEl) lastEl.textContent = formatMs(p1.timeTrial.lastMs);
+      if (bestEl) bestEl.textContent = formatMs(p1.timeTrial.bestMs);
+    }
 function render() {
       const st = api.getState();
       const p1 = st.phases.phase1;
@@ -1527,15 +1601,22 @@ if (p1.isDefeated) {
         // Mark win once and store time trial stats
         p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0, submittedRunId: null };
         p1.win ??= { achieved: false, handled: false, achievedAt: null };
-        if (!p1.win.achieved) {
+        p1.run ??= { state: "running", startedAt: (p1.bootedAt || Date.now()), completedAt: null };
+
+        if (p1.run.state === "running" && !p1.win.achieved) {
           p1.win.achieved = true;
           p1.win.achievedAt = Date.now();
-          const runMs = Math.max(0, p1.win.achievedAt - (p1.bootedAt || p1.win.achievedAt));
+          p1.run.completedAt = p1.win.achievedAt;
+          p1.run.state = "completed";
+
+          const started = p1.run.startedAt || p1.bootedAt || p1.run.completedAt;
+          const runMs = Math.max(0, p1.run.completedAt - started);
+
           p1.timeTrial.lastMs = runMs;
           if (p1.timeTrial.bestMs == null || runMs < p1.timeTrial.bestMs) p1.timeTrial.bestMs = runMs;
         }
 
-        if (!p1.win?.handled) { winOverlay.style.display = "block"; }
+        if (p1.run?.state === "running" && !p1.win?.handled) { winOverlay.style.display = "block"; }
       }
     }
 

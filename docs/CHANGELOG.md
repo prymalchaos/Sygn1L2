@@ -73,3 +73,7 @@
 ### Fixed
 - Win overlay no longer repeats when revisiting Phase 1 after Phase 2 unlock.
 
+## [2025-12-28k] - 2025-12-28
+### Fixed
+- Restored Phase 1 milestone popups with procedural CRT badge avatars (lost in earlier patch overwrite).
+

@@ -191,3 +191,17 @@
 - Added Phase 1 run reset (time trial) while preserving best completion time.
 - Win overlay now shows once per run (guarded by phase1.win.handled).
 - Phase 2 provides a “Restart Phase 1 (Time Trial)” button.
+
+
+## 2025-12-28 (Sydney) – Phase 1 crew badge popups restored
+**Issue**
+- Milestone badge avatar popups stopped appearing because Phase 1 plugin was overwritten by later patches, removing the popup rail + procedural badge generator.
+
+**Fix**
+- Restored procedural “crew badge” avatar popups and re-wired them to milestone log lines.
+- Any log line matching `SPEAKER//POPUP ...` will force a popup.
+- Milestone lines without POPUP still trigger a popup (speaker inferred from `SPEAKER//...`).
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js (BUILD bump for cache-busting)

@@ -2,7 +2,7 @@ export function createDefaultState() {
   const now = Date.now();
   return {
     meta: {
-      schema: 6,
+      schema: 7,
       lastSeenAt: now,
       lastSaveAt: 0,
       offlineSummary: [],
@@ -63,6 +63,17 @@ export function createDefaultState() {
       },
 
       // Phase 2: Engineering Bay prototype (Power + Heat + Reroute)
+        timeTrial: {
+          bestMs: null,
+          lastMs: null,
+          runId: 0,
+        },
+        win: {
+          achieved: false,
+          handled: false,
+          achievedAt: null,
+        },
+
       phase2: {
         bootedAt: now,
 

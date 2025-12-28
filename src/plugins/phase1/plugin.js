@@ -503,17 +503,27 @@ export default {
     function sizeCanvas(c) {
       if (!c) return;
       const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+      // getBoundingClientRect() can be 0 on iOS during initial layout; fall back to offset sizes
       const rect = c.getBoundingClientRect();
-      const w = Math.max(10, Math.floor(rect.width * dpr));
-      const h = Math.max(10, Math.floor(rect.height * dpr));
-      if (c.width !== w || c.height !== h) {
-        c.width = w;
-        c.height = h;
+      const cssW = Math.max(10, Math.floor(rect.width || c.offsetWidth || (c.parentElement ? c.parentElement.clientWidth : 0) || 320));
+      const cssH = Math.max(10, Math.floor(rect.height || c.offsetHeight || 120));
+
+      const pxW = Math.max(10, Math.floor(cssW * dpr));
+      const pxH = Math.max(10, Math.floor(cssH * dpr));
+
+      if (c.width !== pxW || c.height !== pxH) {
+        c.width = pxW;
+        c.height = pxH;
       }
+
       const ctx = c.getContext("2d");
-      ctx.setTransform(1,0,0,1,0,0);
-      ctx.scale(dpr, dpr);
-      return { ctx, w: rect.width, h: rect.height };
+      if (!ctx) return;
+
+      // draw in CSS pixel coordinates
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      return { ctx, w: cssW, h: cssH, dpr };
     }
 
     function drawScope(p1, dt) {
@@ -526,6 +536,15 @@ export default {
       ctx.clearRect(0,0,w,h);
       ctx.fillStyle = "rgba(1,3,2,0.15)";
       ctx.fillRect(0,0,w,h);
+
+      if (isDev) {
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = "rgba(156,255,176,0.65)";
+        ctx.font = "10px ui-monospace, Menlo, Monaco, Consolas, monospace";
+        ctx.fillText(`SCOPE ${Math.floor(w)}x${Math.floor(h)}`, 8, 14);
+        ctx.restore();
+      }
 
       // Grid
       ctx.globalAlpha = 0.18;
@@ -596,6 +615,15 @@ export default {
       ctx.clearRect(0,0,w,h);
       ctx.fillStyle = "rgba(1,3,2,0.15)";
       ctx.fillRect(0,0,w,h);
+
+      if (isDev) {
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = "rgba(156,255,176,0.65)";
+        ctx.font = "10px ui-monospace, Menlo, Monaco, Consolas, monospace";
+        ctx.fillText(`SCOPE ${Math.floor(w)}x${Math.floor(h)}`, 8, 14);
+        ctx.restore();
+      }
 
       // Grid (circle-friendly)
       ctx.globalAlpha = 0.18;
@@ -670,6 +698,9 @@ export default {
     // Resize canvases on layout changes
     const onResize = () => { sizeCanvas($scopeCanvas); sizeCanvas($oscCanvas); };
     window.addEventListener("resize", onResize);
+    // iOS layout quirk: ensure canvases are sized after first paint
+    setTimeout(onResize, 0);
+    setTimeout(onResize, 200);
 
 const $scope = root.querySelector("#scope");
     const $osc = root.querySelector("#osc");

@@ -104,9 +104,7 @@
 ### Fixed
 - Phase 1 boot crash: "Can't find variable: root" (leaderboard wiring now runs inside mount; imports restored to top-level).
 
-## [2025-12-29c] - 2025-12-29
-### Added
-- Phase 1: press-and-hold Ping auto-ping (rate scales with Ping Boost).
-### Changed
-- Phase 1 scopes react more strongly to ping/hold (amplitude spikes + jitter).
+## [2025-12-29d] - 2025-12-29
+### Fixed
+- iOS: press-and-hold Ping no longer selects the "PING" label (prevents input disruption).
 

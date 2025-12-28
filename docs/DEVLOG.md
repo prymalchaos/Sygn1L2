@@ -265,17 +265,11 @@
 - Moved leaderboard helpers and button wiring inside `mount(root, api)` so `root` is always defined.
 
 
-## 2025-12-29 (Sydney) – Phase 1 hold-to-ping + scope interference spikes
-**Added**
-- Ping button supports press-and-hold auto-ping (pointerdown/up). Tap still works.
-- Hold rate defaults to 7 pings/sec and scales with Ping Boost upgrade.
-
-**Visuals**
-- Scope amplitude spikes on each ping and stays "charged" while holding (interference burst).
-- Oscilloscope adds extra jitter during ping/hold.
+## 2025-12-29 (Sydney) – Hotfix: iOS long-press selects Ping label
+**Fix**
+- Disabled text selection/callout on Ping button during press-and-hold.
+- `pointerdown` handler now prevents default to stop iOS selection behavior.
 
 **Files touched**
 - src/plugins/phase1/plugin.js
 - src/core/pluginLoader.js (BUILD bump)
-- docs/DEVLOG.md
-- docs/CHANGELOG.md

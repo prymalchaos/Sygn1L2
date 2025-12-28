@@ -293,3 +293,23 @@
 - docs/FEATURE_LOCK.md
 - docs/DEVLOG.md
 - docs/CHANGELOG.md
+
+
+## 2025-12-29 (Sydney) – Phase 1 purge warning cooldown + hold-to-ping balance pass
+**Fix**
+- Purge warning popup spam mitigated:
+  - Warning flags persisted via `warnFlags` (migrates legacy _warnXX keys).
+  - Added `warnCooldownUntil` to rate-limit high-corruption warnings after login/offline progress.
+
+**Balance**
+- Hold-to-ping now builds **fatigue**:
+  - Hold pings become less efficient (reduced ping power, minimum 0.35x).
+  - Hold adds extra corruption "heat" as fatigue increases.
+  - Tapping relieves fatigue (encourages active play).
+  - Holding gradually slows interval as fatigue rises (soft cap).
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js (BUILD bump)
+- docs/DEVLOG.md
+- docs/CHANGELOG.md

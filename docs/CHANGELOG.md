@@ -117,3 +117,9 @@
 ### Changed
 - Phase 1 scope ping interference spike strengthened.
 
+## [2025-12-29d] - 2025-12-29
+### Fixed
+- Phase 1 purge warning no longer spams popups when corruption remains high (cooldown + persisted flags).
+### Changed
+- Phase 1 hold-to-ping balanced with fatigue (diminishing ping power + extra heat + slight rate slow).
+

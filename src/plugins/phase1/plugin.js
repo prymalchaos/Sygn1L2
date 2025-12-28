@@ -1018,10 +1018,11 @@ function render() {
       // Scope toys (purely visual)
       const ph = (Date.now() / 500) % (Math.PI * 2);
       const amp = clamp((p1.signalPerSecond || 1) / 20, 0.15, 1.0);
+      if ($scope && $osc) {
       $scope.textContent = renderWave(64, 8, ph, amp);
       $osc.textContent = renderWave(24, 8, ph * 1.4, amp * 0.9);
-
-      if (p1.isDefeated) {
+      }
+if (p1.isDefeated) {
         defeatBody.innerHTML = `
           <div style="opacity:0.9;">
             Corruption reached <b>100%</b>.

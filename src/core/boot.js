@@ -6,7 +6,8 @@ import { supabase } from "./supabaseClient.js";
 import { debounce } from "./debounce.js";
 
 const AUTOSAVE_MS = 45_000;
-const TICK_MS = 250; // BATTERY MODE
+const TICK_MS_ACTIVE = 33; // ~30fps active
+const TICK_MS_HIDDEN = 250; // battery when hidden
 
 let state = createDefaultState();
 
@@ -169,31 +170,39 @@ function startAutosaveLoop() {
   }, AUTOSAVE_MS);
 }
 
+
 function startTickLoop() {
-  if (tickTimer) clearInterval(tickTimer);
-  lastTickAt = Date.now();
+  const startWithMs = (ms) => {
+    if (tickTimer) clearInterval(tickTimer);
+    lastTickAt = Date.now();
 
-  tickTimer = setInterval(() => {
-    const now = Date.now();
-    const dtMs = Math.max(0, now - lastTickAt);
-    lastTickAt = now;
+    tickTimer = setInterval(() => {
+      const now = Date.now();
+      const dtMs = Math.max(0, now - lastTickAt);
+      lastTickAt = now;
 
-    if (!activePlugin?.tick) return;
+      if (!activePluginId) return;
+      const phaseId = activePluginId;
+      const phaseState = state.phases[phaseId];
 
-    const phaseId = state.phase;
-    if (phaseId === "phase0_onboarding") return;
+      try {
+        const res = activePlugin.tick({ state: phaseState, dtMs, api: apiFactory() });
+        if (res?.state) state.phases[phaseId] = res.state;
+      } catch (e) {
+        console.warn("Tick error:", e);
+      }
+    }, ms);
+  };
 
-    const api = apiFactory();
-    const phaseState = state.phases[phaseId] ?? {};
+  // Active by default
+  startWithMs(TICK_MS_ACTIVE);
 
-    try {
-      const res = activePlugin.tick({ state: phaseState, dtMs, api });
-      if (res?.state) state.phases[phaseId] = res.state;
-    } catch (e) {
-      console.warn("Tick error:", e);
-    }
-  }, TICK_MS);
+  // Throttle when hidden (iOS background tabs get weird otherwise)
+  document.addEventListener("visibilitychange", () => {
+    startWithMs(document.visibilityState === "hidden" ? TICK_MS_HIDDEN : TICK_MS_ACTIVE);
+  });
 }
+
 
 async function start() {
   await loadPlugins();

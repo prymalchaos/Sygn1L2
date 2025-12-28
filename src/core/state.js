@@ -2,7 +2,7 @@ export function createDefaultState() {
   const now = Date.now();
   return {
     meta: {
-      schema: 7,
+      schema: 8,
       lastSeenAt: now,
       lastSaveAt: 0,
       offlineSummary: [],
@@ -67,6 +67,7 @@ export function createDefaultState() {
           bestMs: null,
           lastMs: null,
           runId: 0,
+          submittedRunId: null,
         },
         win: {
           achieved: false,

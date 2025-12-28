@@ -263,7 +263,7 @@ export default {
     p1.comms ??= [];
     p1.transmission ??= [];
     p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
-        p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0 };
+        p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0, submittedRunId: null };
     p1.win ??= { achieved: false, handled: false, achievedAt: null };
 p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
@@ -620,7 +620,20 @@ p1.flags ??= {};
             </div>
           </div>
 
-          <div id="winOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.94); padding:14px;">
+          <div id="lbOverlay" style="display:none; position:fixed; inset:0; z-index:1100; background:rgba(0,0,0,0.65); padding:16px;">
+        <div class="p1-panel p1-crt" style="max-width:520px; margin:60px auto 0; padding:16px;">
+          <div class="p1-title">LEADERBOARDS</div>
+          <div style="display:flex; gap:10px; margin-top:10px;">
+            <button id="lbGlobalBtn" class="p1-btn" style="flex:1;">GLOBAL TOP 10</button>
+            <button id="lbMeBtn" class="p1-btn" style="flex:1;">MY TOP 10</button>
+          </div>
+          <div id="lbStatus" style="margin-top:10px; font-size:12px; opacity:0.8;"></div>
+          <div id="lbList" class="p1-logbox" style="margin-top:10px; height:260px;"></div>
+          <button id="lbClose" class="p1-btn" style="margin-top:12px; width:100%;">CLOSE</button>
+        </div>
+      </div>
+
+<div id="winOverlay" style="display:none; position:fixed; inset:0; background: rgba(5,7,10,0.94); padding:14px;">
             <div class="p1-panel p1-crt" style="max-width:760px; margin: 0 auto;">
               <div class="p1-title">STABILISATION ACHIEVED</div>
               <div id="winBody" style="margin-top:10px; font-size:14px; opacity:0.92;"></div>
@@ -769,6 +782,17 @@ p1.flags ??= {};
     const $scopeCanvas = root.querySelector("#scopeCanvas");
     const $oscCanvas = root.querySelector("#oscCanvas");
     const $syncPct = root.querySelector("#syncPct");
+
+    const $ttClock = root.querySelector("#ttClock");
+    const $ttBest = root.querySelector("#ttBest");
+    const $ttLast = root.querySelector("#ttLast");
+
+    const $lbOverlay = root.querySelector("#lbOverlay");
+    const $lbGlobalBtn = root.querySelector("#lbGlobalBtn");
+    const $lbMeBtn = root.querySelector("#lbMeBtn");
+    const $lbClose = root.querySelector("#lbClose");
+    const $lbStatus = root.querySelector("#lbStatus");
+    const $lbList = root.querySelector("#lbList");
 
     // Transient visuals (not saved)
     const vis = {
@@ -1103,6 +1127,8 @@ const $scope = root.querySelector("#scope");
       drawScope(p1, dt);
       drawOsc(p1, dt);
 
+      updateTimeTrialPanel(p1);
+
       rafId = requestAnimationFrame(frame);
     };
     rafId = requestAnimationFrame(frame);
@@ -1344,6 +1370,95 @@ function maybeWarn(p1) {
       return lines.join("\n");
     }
 
+
+    function updateTimeTrialPanel(p1) {
+      if (!$ttClock) return;
+      const now = Date.now();
+      const runMs = Math.max(0, now - (p1.bootedAt || now));
+      $ttClock.textContent = fmtMs(runMs);
+      $ttBest.textContent = (p1.timeTrial?.bestMs == null) ? "--:--.--" : fmtMs(p1.timeTrial.bestMs);
+      $ttLast.textContent = (p1.timeTrial?.lastMs == null) ? "--:--.--" : fmtMs(p1.timeTrial.lastMs);
+    }
+
+    function renderLeaderboardRows(rows) {
+      if (!$lbList) return;
+      if (!rows || rows.length === 0) {
+        $lbList.textContent = "NO DATA YET.";
+        return;
+      }
+      let out = "RANK  USERNAME            TIME\n";
+      out += "----  ------------------  ---------\n";
+      rows.forEach((r, i) => {
+        const rank = String(i + 1).padStart(2, " ");
+        const name = String(r.username || "UNKNOWN").toUpperCase().slice(0, 18).padEnd(18, " ");
+        const time = fmtMs(r.time_ms);
+        out += `${rank}    ${name}  ${time}\n`;
+      });
+      $lbList.textContent = out;
+    }
+
+    async function fetchLeaderboard(which) {
+      const profile = api.getProfile();
+      if (!profile) {
+        $lbStatus.textContent = "Not logged in.";
+        renderLeaderboardRows([]);
+        return;
+      }
+
+      $lbStatus.textContent = "Fetching…";
+      try {
+        let q = api.supabase
+          .from("phase_time_trials")
+          .select("username, time_ms")
+          .eq("phase", 1)
+          .order("time_ms", { ascending: true })
+          .limit(10);
+
+        if (which === "me") q = q.eq("player_id", profile.id);
+
+        const { data, error } = await q;
+        if (error) throw error;
+
+        $lbStatus.textContent = (which === "me") ? "My top 10 runs (Phase 1)" : "Global top 10 (Phase 1)";
+        renderLeaderboardRows(data || []);
+      } catch (e) {
+        $lbStatus.textContent = e?.message || String(e);
+        renderLeaderboardRows([]);
+      }
+    }
+
+    async function submitTimeTrialRunOnce(runMs) {
+      const profile = api.getProfile();
+      if (!profile) return;
+
+      const st = api.getState();
+      const p1 = st.phases.phase1;
+      p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0, submittedRunId: null };
+
+      if (p1.timeTrial.submittedRunId === p1.timeTrial.runId) return;
+
+      try {
+        const { error } = await api.supabase
+          .from("phase_time_trials")
+          .insert({
+            phase: 1,
+            player_id: profile.id,
+            username: profile.username,
+            time_ms: Math.floor(runMs),
+          });
+
+        if (!error) {
+          p1.timeTrial.submittedRunId = p1.timeTrial.runId;
+          api.setState(st);
+          api.saveSoon();
+        }
+      } catch (e) {
+        // silent: leaderboard is non-critical
+        console.warn(e);
+      }
+    }
+
+
 function render() {
       const st = api.getState();
       const p1 = st.phases.phase1;
@@ -1402,14 +1517,15 @@ if (p1.isDefeated) {
       if (p1.completed && st.meta?.unlockedPhases?.phase2) {
         winBody.innerHTML = `
           <div style="opacity:0.92;">
-            Signal held at <b>${nfmt(TUNE.winSignal)}</b> while corruption stayed under <b>${TUNE.winCorruptionMax}%</b>.
+            Signal held at <b>${nfmt(TUNE.winSignal)}</b> while corruption stayed under <b>${TUNE.winCorruptionMax}%</b>.<br/>
+            TIME: <b>${fmtMs(p1.timeTrial?.lastMs ?? 0)}</b>  BEST: <b>${p1.timeTrial?.bestMs == null ? "--:--.--" : fmtMs(p1.timeTrial.bestMs)}</b>.
           </div>
           <div style="margin-top:8px; opacity:0.85; font-size:13px;">
             CONTROL//RETURN  “You did it. The ship’s quiet. For now.”
           </div>
         `;
         // Mark win once and store time trial stats
-        p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0 };
+        p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0, submittedRunId: null };
         p1.win ??= { achieved: false, handled: false, achievedAt: null };
         if (!p1.win.achieved) {
           p1.win.achieved = true;

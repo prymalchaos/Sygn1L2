@@ -2,7 +2,7 @@ export function createDefaultState() {
   const now = Date.now();
   return {
     meta: {
-      schema: 8,
+      schema: 9,
       lastSeenAt: now,
       lastSaveAt: 0,
       offlineSummary: [],
@@ -73,6 +73,12 @@ export function createDefaultState() {
           achieved: false,
           handled: false,
           achievedAt: null,
+        },
+
+        run: {
+          state: "running",
+          startedAt: null,
+          completedAt: null,
         },
 
       phase2: {

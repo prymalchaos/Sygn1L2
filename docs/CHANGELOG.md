@@ -96,3 +96,7 @@
 - Phase 1 win overlay no longer re-triggers when revisiting Phase 1 after Phase 2 unlock.
 - Time trial duration no longer records as 0ms.
 
+## [2025-12-29b] - 2025-12-29
+### Fixed
+- Phase 1 boot crash: "Can't find variable: attachFastTap".
+

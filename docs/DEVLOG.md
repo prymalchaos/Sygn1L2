@@ -252,3 +252,8 @@
 - src/core/pluginLoader.js (BUILD bump)
 - docs/DEVLOG.md
 - docs/CHANGELOG.md
+
+
+## 2025-12-29 (Sydney) – Hotfix: attachFastTap undefined in Phase 1
+**Fix**
+- Added `attachFastTap()` helper to Phase 1 plugin (matching Phase 2) to prevent boot crash.

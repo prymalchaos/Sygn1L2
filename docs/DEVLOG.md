@@ -171,3 +171,17 @@
 **Files touched**
 - src/plugins/phase1/plugin.js
 - src/core/pluginLoader.js (BUILD bump)
+
+
+## 2025-12-28 (Sydney) – Phase 1 skin + scopes merge fix
+**Problem**
+- Some scope patches overwrote the CRT skin, and iOS could still show blank scopes if canvas sizing hit 0 during first layout.
+
+**Fix**
+- Restored CRT skin classes/styles (p1-shell + p1-crt panels).
+- Ensured scopes draw during render() as well as RAF (covers mobile RAF throttling).
+- Added always-on canvas debug label showing scope canvas dimensions.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js

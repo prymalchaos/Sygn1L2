@@ -61,3 +61,8 @@
 ### Fixed
 - Phase 1 scopes blank on some mobile layouts due to 0px canvas sizing; added sizing fallbacks and dev-only dimension debug.
 
+## [2025-12-28k] - 2025-12-28
+### Fixed
+- Restored Phase 1 CRT skin after scope patches overwrote styling.
+- Scopes now render even if requestAnimationFrame is throttled on mobile; added canvas debug label.
+

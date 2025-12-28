@@ -661,13 +661,13 @@ export default {
 
       // Ping “kick” makes a temporary spike/noise burst
       const sincePing = (Date.now() - vis.lastPingAt) / 1000;
-      const kick = Math.max(0, 1 - sincePing * 4); // fades in ~0.25s
-      const kickAmp = kick * 0.25;
+      const kick = Math.max(0, 1 - sincePing * 2.2); // fades in ~0.45s
+      const kickAmp = kick * 0.75;
 
       // Draw waveform
       const mid = h * 0.5;
       const A = (h * 0.40) * amp;
-      vis.t += dt * (0.8 + sps / 25); // speed scales with SPS
+      vis.t += dt * (2.2 + sps / 10); // speed scales with SPS
 
       ctx.globalAlpha = 1;
 
@@ -690,7 +690,8 @@ export default {
         const wobble = Math.sin(vis.t * 0.8 + u * Math.PI * 10) * noise * 0.35;
         const rnd = (Math.sin((vis.t*6) + u*80) + Math.sin((vis.t*9.2) + u*140)) * 0.5;
         const n = rnd * noise * 0.10;
-        const y = mid + (base + wobble + n) * A + (base * A * kickAmp);
+        const burst = Math.sin((vis.t*18) + u*220) * kick * 0.18;
+        const y = mid + (base + wobble + n + burst) * A + (base * A * kickAmp);
         if (x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
       }
       ctx.stroke();
@@ -746,7 +747,10 @@ export default {
 
       // Phase offset transitions toward 90° at 100% (perfect circle)
       const corr = p1.corruption || 0;
-      const chaos = (corr / 100) * 0.8;
+      const chaosBase = (corr / 100) * 0.8;
+      const sincePing = (Date.now() - vis.lastPingAt) / 1000;
+      const pingKick = Math.max(0, 1 - sincePing * 2.2);
+      const chaos = chaosBase + pingKick * 0.35;
 
       const sync01 = sync / 100;
       const targetPhi = Math.PI / 2; // 90°
@@ -760,7 +764,7 @@ export default {
       const cx = w * 0.5, cy = h * 0.52;
       const R = Math.min(w,h) * 0.36;
 
-      vis.t += dt * 0.6;
+      vis.t += dt * 1.1;
 
       ctx.strokeStyle = "rgba(156,255,176,0.88)";
       ctx.shadowColor = "rgba(156,255,176,0.35)";

@@ -4,7 +4,7 @@
 // Bump BUILD to force fresh plugin loads.
 
 const plugins = new Map();
-const BUILD = "2025-12-28g";
+const BUILD = "2025-12-28h";
 
 export async function loadPlugins() {
   const pluginIds = [

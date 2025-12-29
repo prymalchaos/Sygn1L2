@@ -136,3 +136,10 @@
 ### Changed
 - Hold ping balance: slightly higher fatigue/heat.
 
+## [2025-12-29e] - 2025-12-29
+### Fixed
+- Hold-to-ping no longer works before unlock; Hold-Press Actuator gated until 50 signal.
+- Time Trial RUN clock updates live.
+### Added
+- Analogue VU-style fatigue meter with cooloff ETA.
+

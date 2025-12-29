@@ -342,3 +342,19 @@
 - src/pluginLoader.js
 - docs/DEVLOG.md
 - docs/CHANGELOG.md
+
+
+## 2025-12-29 (Sydney) – Bugfix: Hold unlock gate @50 signal, VU fatigue meter, live Time Trial clock
+**Fixes**
+- Hold-to-ping no longer activates before unlock; Hold-Press Actuator is locked until **50 signal**.
+- Time Trial RUN clock updates continuously (including first playthrough).
+
+**UI**
+- Added analogue VU-style Fatigue meter next to the oscilloscope, with cooloff ETA.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js
+- src/pluginLoader.js
+- docs/DEVLOG.md
+- docs/CHANGELOG.md

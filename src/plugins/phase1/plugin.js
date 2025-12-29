@@ -90,6 +90,10 @@ function attachHoldPing(btn, doPing, getRate, canHold, onHoldChange) {
   let holding = false;
   let timer = 0;
 
+  // iOS Safari can be unreliable with Pointer Events for long-press gestures.
+  // Support touch events as a fallback so press-and-hold works on iPhone.
+  let touchActive = false;
+
   const stop = () => {
     holding = false;
     vis.holdPing = false;
@@ -97,6 +101,7 @@ function attachHoldPing(btn, doPing, getRate, canHold, onHoldChange) {
     // let holdPower cool via frame loop
     if (timer) clearInterval(timer);
     timer = 0;
+    touchActive = false;
   };
 
   const start = (e) => {
@@ -139,15 +144,24 @@ function attachHoldPing(btn, doPing, getRate, canHold, onHoldChange) {
   btn.style.userSelect = "none";
   btn.style.webkitTouchCallout = "none";
 
+  // Pointer Events (modern)
   btn.addEventListener("pointerdown", start, { passive: false });
   btn.addEventListener("pointerup", stop, { passive: true });
   btn.addEventListener("pointercancel", stop, { passive: true });
   btn.addEventListener("pointerleave", stop, { passive: true });
 
-  // iOS Safari fallback: some builds don’t deliver pointer sequences reliably on buttons.
-  btn.addEventListener("touchstart", (e) => start(e), { passive: false });
-  btn.addEventListener("touchend", (e) => stop(e), { passive: true });
-  btn.addEventListener("touchcancel", (e) => stop(e), { passive: true });
+  // Touch fallback (iOS)
+  btn.addEventListener(
+    "touchstart",
+    (e) => {
+      if (touchActive) return;
+      touchActive = true;
+      start(e);
+    },
+    { passive: false }
+  );
+  btn.addEventListener("touchend", stop, { passive: true });
+  btn.addEventListener("touchcancel", stop, { passive: true });
 
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
 
@@ -584,11 +598,8 @@ p1.flags ??= {};
         }
         .p1-two {
           display:grid;
-          grid-template-columns: minmax(0,1fr) clamp(150px, 20vw, 230px) clamp(150px, 20vw, 230px);
+          grid-template-columns: 1fr minmax(180px, 240px) minmax(180px, 240px);
           gap: 12px;
-        }
-        .p1-two > .p1-panel { min-width: 0; }
-        gap: 12px;
         }
         @media (max-width: 740px) {
           .p1-two { grid-template-columns: 1fr; }
@@ -832,19 +843,19 @@ p1.flags ??= {};
               <div class="p1-scopebox p1-curved"><div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;"><div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">OSCILLOSCOPE</div><div style="font-size:12px; opacity:0.75;">Synchronicity <span id="syncPct">0</span>%</div></div><canvas id="oscCanvas" class="p1-osccanvas"></canvas></div>
             </div>
 
-            <div id="fatigueHud" class="p1-panel p1-crt" style="display:block; margin-top:12px;">
-            <div class="p1-row" style="justify-content:space-between;">
+            <div class="p1-panel p1-crt">
               <div class="p1-title">FATIGUE</div>
-              <div class="p1-label" id="fatiguePct" style="opacity:0.85;">0%</div>
+              <div class="p1-scopebox p1-curved">
+                <div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
+                  <div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">UV METER</div>
+                  <div class="p1-label" id="fatigueEta" style="opacity:0.75;">--</div>
+                </div>
+                <canvas id="fatigueMeter" width="160" height="110" style="width:100%; height:110px; display:block; margin-top:8px; border-radius:12px;"></canvas>
+                <div class="p1-label" style="margin-top:6px; opacity:0.70; font-size:11px;">
+                  Holding Ping builds fatigue and heat. Vent with taps.
+                </div>
+              </div>
             </div>
-            <div style="margin-top:10px; height:10px; border:1px solid rgba(215,255,224,0.14); border-radius:999px; overflow:hidden;">
-              <div id="fatigueBar" style="height:100%; width:0%; background:rgba(149,255,176,0.35);"></div>
-            </div>
-            <div class="p1-label" style="margin-top:8px; opacity:0.75;">Holding Ping builds fatigue and heat. Vent with taps, cool with upgrades.</div>
-          </div>
-
-          
-
           </div>
 
           <div class="p1-panel p1-crt">
@@ -1594,15 +1605,27 @@ const frame = (t) => {
 
     // Ping: tap + press-and-hold auto-ping
     const $ping = root.querySelector("#ping");
-    $ping.addEventListener("click", () => doPing(false));
-    // Fast tap on iOS without interfering with press-and-hold
-    $ping.addEventListener("touchend", (e) => {
-      // If we were holding, attachHoldPing will handle stop.
-      if (api.getState()?.phases?.phase1?._holdingPing) return;
-      e.preventDefault();
+    // Tap behavior: use click + touchend. We avoid pointerdown fast-tap here
+    // because it can interfere with long-press detection on iOS.
+    let _lastTapAt = 0;
+    const tapPing = () => {
+      // If we just ended a hold, ignore the synthetic click.
+      if (vis.holdPing) return;
+      const t = Date.now();
+      if (t - _lastTapAt < 120) return;
+      _lastTapAt = t;
       doPing(false);
-    }, { passive: false });
-attachHoldPing(
+    };
+    $ping?.addEventListener("click", tapPing);
+    $ping?.addEventListener(
+      "touchend",
+      (e) => {
+        e.preventDefault();
+        tapPing();
+      },
+      { passive: false }
+    );
+    attachHoldPing(
       $ping,
       (fromHold) => doPing(!!fromHold),
       () => {
@@ -1739,7 +1762,7 @@ root.querySelector("#purge").onclick = () => doPurge();
       p1.completed = false;
 
       // Reset upgrades (fresh run)
-      p1.upgrades = { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+      p1.upgrades = { holdPing: 0, fatigueCooler: 0, spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0, autopilotCore: 0 };
 
       // Reset warning cooldowns/flags so UI doesn't spam on resume
       p1.warnFlags = { c25: false, c50: false, c75: false };

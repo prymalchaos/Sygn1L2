@@ -207,15 +207,19 @@ const UPGRADE_DEFS = [
 
   {
     id: "holdPing",
-    name: "Hold-Press Actuator",
-    desc: "Unlock press-and-hold Ping (auto-ping). Builds fatigue.",
+    // This upgrade now improves hold efficiency rather than unlocking it. Each
+    // level reduces the rate that fatigue builds up while holding Ping, making
+    // it possible to sustain high output for longer. The first level reduces
+    // fatigue build by 15%, and subsequent levels stack.
+    name: "Fatigue Dampener",
+    desc: "Reduce fatigue build-up when holding Ping. Each level reduces fatigue increase by 15%.",
     requiresSignal: 15,
-    base: 15,
-    growth: 99,
-    effectText: (lvl) => (lvl >= 1 ? "UNLOCKED" : "Unlock hold Ping"),
+    base: 25,
+    growth: 1.8,
+    effectText: (lvl) => `-${(lvl + 1) * 15}% fatigue build`,
     apply: (p1, nextLvl) => {
-      p1.upgrades.holdPing = 1;
-      pushLog(p1.comms, "CONTROL//POPUP  Hold-Press Actuator online. Maintain pressure, manage fatigue.");
+      p1.upgrades.holdPing = nextLvl;
+      pushLog(p1.comms, "CONTROL//POPUP  Fatigue Dampener installed. Hold efficiency improved.");
     },
   },
   {
@@ -1566,7 +1570,9 @@ const frame = (t) => {
     }
 
     
-    function doPing(fromHold = false) {
+    function doPing() {
+      // Ping always behaves as a press‑and‑hold interaction. There is no tap
+      // alternative: each invocation increases fatigue and reduces power based on fatigue.
       const st = api.getState();
       const p1 = st.phases.phase1;
       if (p1.isDefeated) return;
@@ -1575,77 +1581,58 @@ const frame = (t) => {
       p1.hold ??= { fatigue: 0 };
       const basePower = p1.pingPower || 5;
 
-      // Hold-to-ping is convenient, but builds "fatigue" that reduces efficiency and adds heat/noise.
+      // Fatigue reduces power output and builds up with every ping. It recovers
+      // slowly via the frame loop. There is no tap relief anymore, so fatigue
+      // only increases here and decays elsewhere.
       let fatigue = clamp(p1.hold.fatigue || 0, 0, 1);
-      let powerMult = 1;
-
-      if (fromHold) {
-        powerMult = Math.max(TUNE.holdMinPowerMult, 1 - 0.65 * fatigue);
-        fatigue = clamp(fatigue + TUNE.holdFatigueInc, 0, 1);
-      } else {
-        // Reward active tapping: it "stabilizes" the line and bleeds off fatigue.
-        fatigue = clamp(fatigue - TUNE.holdFatigueTapRelief, 0, 1);
-      }
+      // Calculate power multiplier: linear dropoff with fatigue, bounded by a minimum.
+      const powerMult = Math.max(TUNE.holdMinPowerMult, 1 - 0.65 * fatigue);
+      // Build fatigue. The "Fatigue Dampener" upgrade (formerly holdPing)
+      // reduces the fatigue increment by 15% per level.
+      const holdLvl = p1.upgrades?.holdPing || 0;
+      const incMult = Math.max(0, 1 - holdLvl * 0.15);
+      fatigue = clamp(fatigue + TUNE.holdFatigueInc * incMult, 0, 1);
 
       p1.hold.fatigue = fatigue;
 
+      // Award signal scaled by power multiplier
       p1.signal += basePower * powerMult;
 
-      // Noise: tapping adds a small bump; holding adds extra heat when fatigued.
-      const extraHeat = fromHold ? (TUNE.holdOverheatNoise * fatigue) : 0;
+      // Heat/noise: proportional to fatigue. Always add overheat noise on hold.
+      const extraHeat = TUNE.holdOverheatNoise * fatigue;
       p1.corruption = clamp((p1.corruption || 0) + TUNE.pingCorruptionNoise + extraHeat, 0, 100);
-// visuals: spike the scope
+
+      // visuals: spike the scope
       vis.lastPingAt = Date.now();
-      vis.shake = Math.min(1, (vis.shake || 0) + (fromHold ? 0.15 : 0.35));
+      // Shake the scope modestly for each hold ping
+      vis.shake = Math.min(1, (vis.shake || 0) + 0.15);
 
       api.setState(st);
       api.saveSoon();
       render();
     }
 
-    // Ping: tap + press-and-hold auto-ping
+    // Ping: only press-and-hold auto-ping. Tapping is disabled; the button
+    // behaves exclusively as a hold to accumulate signal. Holding builds
+    // fatigue over time and reduces power.
     const $ping = root.querySelector("#ping");
-    // Tap behavior: use click + touchend. We avoid pointerdown fast-tap here
-    // because it can interfere with long-press detection on iOS.
-    let _lastTapAt = 0;
-    const tapPing = () => {
-      // If we just ended a hold, ignore the synthetic click.
-      if (vis.holdPing) return;
-      const t = Date.now();
-      if (t - _lastTapAt < 120) return;
-      _lastTapAt = t;
-      doPing(false);
-    };
-    $ping?.addEventListener("click", tapPing);
-    $ping?.addEventListener(
-      "touchend",
-      (e) => {
-        e.preventDefault();
-        tapPing();
-      },
-      { passive: false }
-    );
     attachHoldPing(
       $ping,
-      (fromHold) => doPing(!!fromHold),
+      () => doPing(),
       () => {
+        // Base rate of pings/sec. Upgrades can modify this. Fatigue soft-caps
+        // the rate via attachHoldPing's logic.
         const st = api.getState();
         const p1 = st.phases.phase1;
         const baseRate = 7; // pings/sec
         const lvl = (p1.upgrades?.pingBoost || 0);
         let rate = baseRate * (1 + lvl * 0.12);
-
         // As fatigue rises, holding slows a bit (soft cap).
         const fatigue = clamp(p1.hold?.fatigue || 0, 0, 1);
         rate = rate / (1 + fatigue * 0.9);
-
         return Math.max(1, rate);
       },
-      () => {
-        const st = api.getState();
-        const p1 = st.phases.phase1;
-        return !!(p1.upgrades?.holdPing);
-      },
+      () => true,
       (on) => {
         const st = api.getState();
         st.phases.phase1._holdingPing = !!on;

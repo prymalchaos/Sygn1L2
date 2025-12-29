@@ -123,3 +123,8 @@
 ### Changed
 - Phase 1 hold-to-ping balanced with fatigue (diminishing ping power + extra heat + slight rate slow).
 
+## [2025-12-29e] - 2025-12-29
+### Fixed
+- Prevent repeated identical popups from spamming (cooldown).
+- Re-enabled robust double-tap/gesture zoom suppression on mobile.
+

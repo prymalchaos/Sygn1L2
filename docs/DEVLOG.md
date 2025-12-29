@@ -313,3 +313,19 @@
 - src/core/pluginLoader.js (BUILD bump)
 - docs/DEVLOG.md
 - docs/CHANGELOG.md
+
+
+## 2025-12-29 (Sydney) – Hotfix: popup spam safety + restore double-tap zoom suppression
+**Fixes**
+- Added popup cooldown (12s per identical message) to prevent repeated warnings from spamming the UI after resume/offline.
+- Restored robust double-tap zoom suppression in core boot:
+  - blocks iOS double-tap zoom + gesture zoom
+  - disables long-press callouts/text selection globally
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/boot.js
+- src/core/pluginLoader.js
+- src/pluginLoader.js
+- docs/DEVLOG.md
+- docs/CHANGELOG.md

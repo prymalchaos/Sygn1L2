@@ -49,19 +49,10 @@ function maybePopupFromLine(line) {
   if (!_popupHook) return;
   // Format: SPEAKER//POPUP  message...
   const m = String(line).match(/^([A-Z0-9 _-]{2,18})\/\/\s*POPUP\s+(.*)$/i);
-  if (m) {
-    const speaker = m[1].trim().toUpperCase();
-    const msg = m[2].trim();
-    _popupHook(speaker, msg);
-    return;
-  }
-  // Also allow: SPEAKER//NOTE ... (milestones)
-  const m2 = String(line).match(/^([A-Z0-9 _-]{2,18})\/\/[A-Z]+\s+(.*)$/i);
-  if (m2) {
-    const speaker = m2[1].trim().toUpperCase();
-    const msg = m2[2].trim();
-    _popupHook(speaker, msg);
-  }
+  if (!m) return;
+  const speaker = m[1].trim().toUpperCase();
+  const msg = m[2].trim();
+  _popupHook(speaker, msg);
 }
 
 function pushLog(arr, line, max = 60) {
@@ -178,6 +169,32 @@ function processMilestones(p1) {
 }
 
 const UPGRADE_DEFS = [
+
+  {
+    id: "holdPing",
+    name: "Hold-Press Actuator",
+    desc: "Unlock press-and-hold Ping (auto-ping). Builds fatigue.",
+    base: 15,
+    growth: 99,
+    effectText: (lvl) => (lvl >= 1 ? "UNLOCKED" : "Unlock hold Ping"),
+    apply: (p1, nextLvl) => {
+      p1.upgrades.holdPing = 1;
+      pushLog(p1.comms, "CONTROL//POPUP  Hold-Press Actuator online. Maintain pressure, manage fatigue.");
+    },
+  },
+  {
+    id: "fatigueCooler",
+    name: "Thermal Bleed Valve",
+    desc: "Fatigue cools off faster between holds.",
+    base: 60,
+    growth: 1.7,
+    effectText: (lvl) => `+${((lvl + 1) * 20)}% cooloff`,
+    apply: (p1, nextLvl) => {
+      p1.upgrades.fatigueCooler = nextLvl;
+      pushLog(p1.comms, "OPS//POPUP  Thermal Bleed Valve installed. Fatigue venting improved.");
+    },
+  },
+
   {
     id: "spsBoost",
     name: "Signal Booster Coil",
@@ -293,11 +310,11 @@ const TUNE = {
   purgeCostReductionPerLvl: 0.07, // up to 60% reduction
   purgeBaseAmount: 18,          // percentage points
   purgePowerPerLvl: 0.10,       // +10% per lvl  // Hold-to-ping balance
-  holdFatigueInc: 0.04,
+  holdFatigueInc: 0.05,
   holdFatigueTapRelief: 0.10,
   holdFatigueDecayPerSec: 0.28,
   holdMinPowerMult: 0.35,
-  holdOverheatNoise: 0.10,
+  holdOverheatNoise: 0.12,
 
 };
 
@@ -369,7 +386,7 @@ export default {
 
     p1.comms ??= [];
     p1.transmission ??= [];
-    p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+    p1.upgrades ??= { holdPing: 0, fatigueCooler: 0, spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0, autopilotCore: 0 };
             p1.run ??= { state: "running", startedAt: null, completedAt: null };
     if (!p1.run.startedAt) p1.run.startedAt = p1.bootedAt || Date.now();
 p1.timeTrial ??= { bestMs: null, lastMs: null, runId: 0, submittedRunId: null };
@@ -689,6 +706,17 @@ p1.flags ??= {};
             </div>
           </div>
 
+          <div id="fatigueHud" class="p1-panel p1-crt" style="display:none; margin-top:12px;">
+            <div class="p1-row" style="justify-content:space-between;">
+              <div class="p1-title">FATIGUE</div>
+              <div class="p1-label" id="fatiguePct" style="opacity:0.85;">0%</div>
+            </div>
+            <div style="margin-top:10px; height:10px; border:1px solid rgba(215,255,224,0.14); border-radius:999px; overflow:hidden;">
+              <div id="fatigueBar" style="height:100%; width:0%; background:rgba(149,255,176,0.35);"></div>
+            </div>
+            <div class="p1-label" style="margin-top:8px; opacity:0.75;">Holding Ping builds fatigue and heat. Vent with taps, cool with upgrades.</div>
+          </div>
+
           <div class="p1-panel p1-crt">
             <div class="p1-title">UPGRADES</div>
             <div style="opacity:0.8; font-size:12px; margin-top:6px;">
@@ -788,7 +816,7 @@ p1.flags ??= {};
     const $comms = root.querySelector("#commsBox");
 
     const $popupRail = root.querySelector("#popupRail");
-    const popState = { items: [], max: 3 };
+    const popState = { items: [], max: 3, lastAnyAt: 0, lastByKey: new Map(), minGapMs: 900, perKeyMs: 12000 };
 
     function hash32(str) {
       let h = 2166136261 >>> 0;
@@ -862,6 +890,13 @@ p1.flags ??= {};
     function showPopup(speaker, msg) {
       if (!$popupRail) return;
 
+      const now = Date.now();
+      const key = `${String(speaker)}::${String(msg)}`.slice(0, 180);
+      const lastKey = popState.lastByKey.get(key) || 0;
+      if (now - lastKey < popState.perKeyMs) return;
+      if (now - (popState.lastAnyAt || 0) < popState.minGapMs) return;
+      popState.lastAnyAt = now;
+      popState.lastByKey.set(key, now);
       const el = document.createElement("div");
       el.className = "p1-popup";
 
@@ -1176,7 +1211,7 @@ const $scope = root.querySelector("#scope");
     function renderShop() {
       const st = api.getState();
       const p1 = st.phases.phase1;
-      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+      p1.upgrades ??= { holdPing: 0, fatigueCooler: 0, spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0, autopilotCore: 0 };
     p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
 
@@ -1220,7 +1255,7 @@ const $scope = root.querySelector("#scope");
     function buy(upgradeId) {
       const st = api.getState();
       const p1 = st.phases.phase1;
-      p1.upgrades ??= { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+      p1.upgrades ??= { holdPing: 0, fatigueCooler: 0, spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0, autopilotCore: 0 };
     p1.flags ??= {};
     p1.stats ??= { purges: 0, upgradesBought: 0 };
 
@@ -1250,7 +1285,20 @@ const $scope = root.querySelector("#scope");
       const dt = Math.min(0.05, (t - lastFrame) / 1000);
       lastFrame = t;
 
-      // decay ping shake
+      
+
+      // Fatigue cooloff (passive). Scales with Thermal Bleed Valve upgrade.
+      {
+        const st = api.getState();
+        const p1s = st.phases.phase1;
+        p1s.hold ??= { fatigue: 0 };
+        const lvl = (p1s.upgrades?.fatigueCooler || 0);
+        const mult = 1 + (lvl * 0.20); // each level: +20% decay
+        const decay = TUNE.holdFatigueDecayPerSec * mult;
+        p1s.hold.fatigue = clamp((p1s.hold.fatigue || 0) - dt * decay, 0, 1);
+        api.setState(st);
+      }
+// decay ping shake
       vis.shake = Math.max(0, (vis.shake || 0) - dt * 3.5);
 
 
@@ -1698,7 +1746,25 @@ function maybeWarn(p1) {
 
 
 
-    function renderTimeTrial(p1) {
+    
+    function renderFatigue(p1) {
+      const hud = root.querySelector("#fatigueHud");
+      if (!hud) return;
+      p1.hold ??= { fatigue: 0 };
+      const f = clamp(p1.hold.fatigue || 0, 0, 1);
+
+      const show = f > 0.03 || (vis && vis.holdPing);
+      hud.style.display = show ? "block" : "none";
+
+      const pct = Math.round(f * 100);
+      const pctEl = root.querySelector("#fatiguePct");
+      const bar = root.querySelector("#fatigueBar");
+      if (pctEl) pctEl.textContent = `${pct}%`;
+      if (bar) bar.style.width = `${pct}%`;
+
+      hud.style.opacity = String(show ? (0.35 + 0.65 * f) : 0);
+    }
+function renderTimeTrial(p1) {
       const runEl = root.querySelector("#ttRun");
       const lastEl = root.querySelector("#ttLast");
       const bestEl = root.querySelector("#ttBest");

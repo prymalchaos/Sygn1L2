@@ -148,6 +148,15 @@ function attachHoldPing(btn, doPing, getRate, canHold, onHoldChange) {
   btn.addEventListener("pointercancel", stop, { passive: true });
   btn.addEventListener("pointerleave", stop, { passive: true });
 
+  // Mouse fallbacks (for browsers that lack PointerEvent support)
+  // Some browsers (or contexts) only dispatch traditional mouse events for button
+  // interactions and may not support pointer events at all. Attach separate
+  // handlers for mousedown and mouseup to start/stop the hold loop. We include
+  // mouseleave to ensure the hold stops if the cursor leaves the button.
+  btn.addEventListener("mousedown", start, { passive: false });
+  btn.addEventListener("mouseup", stop, { passive: true });
+  btn.addEventListener("mouseleave", stop, { passive: true });
+
   // Touch fallbacks (iOS Safari long-press reliability)
   btn.addEventListener("touchstart", (ev) => start(ev), { passive: false });
   btn.addEventListener("touchend", stop, { passive: true });

@@ -124,12 +124,7 @@ function attachHoldPing(btn, doPing, getRate, canHold, onHoldChange) {
     // immediate ping for responsiveness
     doPing(true);
 
-    let rate = 7;
-    try {
-      rate = Number(getRate?.());
-    } catch {}
-    if (!Number.isFinite(rate) || rate <= 0) rate = 7;
-    rate = Math.max(1, rate); // pings/sec
+    const rate = Math.max(1, getRate()); // pings/sec
     const interval = Math.max(25, Math.floor(1000 / rate));
 
     timer = setInterval(() => {
@@ -145,13 +140,14 @@ function attachHoldPing(btn, doPing, getRate, canHold, onHoldChange) {
   btn.style.webkitTouchCallout = "none";
 
   btn.addEventListener("pointerdown", start, { passive: false });
-  // iOS Safari can be flaky with Pointer Events during long-press; add touch fallbacks.
-  btn.addEventListener("touchstart", (e) => start(e.changedTouches?.[0] ? { ...e, pointerId: 1, preventDefault: () => e.preventDefault(), stopPropagation: () => e.stopPropagation() } : e), { passive: false });
   btn.addEventListener("pointerup", stop, { passive: true });
-  btn.addEventListener("touchend", stop, { passive: true });
-  btn.addEventListener("touchcancel", stop, { passive: true });
   btn.addEventListener("pointercancel", stop, { passive: true });
   btn.addEventListener("pointerleave", stop, { passive: true });
+
+  // iOS Safari fallback: some builds don’t deliver pointer sequences reliably on buttons.
+  btn.addEventListener("touchstart", (e) => start(e), { passive: false });
+  btn.addEventListener("touchend", (e) => stop(e), { passive: true });
+  btn.addEventListener("touchcancel", (e) => stop(e), { passive: true });
 
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
 
@@ -199,7 +195,7 @@ const UPGRADE_DEFS = [
     id: "holdPing",
     name: "Hold-Press Actuator",
     desc: "Unlock press-and-hold Ping (auto-ping). Builds fatigue.",
-    requiresSignal: 50,
+    requiresSignal: 15,
     base: 15,
     growth: 99,
     effectText: (lvl) => (lvl >= 1 ? "UNLOCKED" : "Unlock hold Ping"),
@@ -588,8 +584,11 @@ p1.flags ??= {};
         }
         .p1-two {
           display:grid;
-          grid-template-columns: 1fr 260px;
+          grid-template-columns: minmax(0,1fr) clamp(150px, 20vw, 230px) clamp(150px, 20vw, 230px);
           gap: 12px;
+        }
+        .p1-two > .p1-panel { min-width: 0; }
+        gap: 12px;
         }
         @media (max-width: 740px) {
           .p1-two { grid-template-columns: 1fr; }
@@ -832,9 +831,8 @@ p1.flags ??= {};
               <div class="p1-title">OSC</div>
               <div class="p1-scopebox p1-curved"><div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;"><div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">OSCILLOSCOPE</div><div style="font-size:12px; opacity:0.75;">Synchronicity <span id="syncPct">0</span>%</div></div><canvas id="oscCanvas" class="p1-osccanvas"></canvas></div>
             </div>
-          </div>
 
-          <div id="fatigueHud" class="p1-panel p1-crt" style="display:none; margin-top:12px;">
+            <div id="fatigueHud" class="p1-panel p1-crt" style="display:block; margin-top:12px;">
             <div class="p1-row" style="justify-content:space-between;">
               <div class="p1-title">FATIGUE</div>
               <div class="p1-label" id="fatiguePct" style="opacity:0.85;">0%</div>
@@ -843,6 +841,10 @@ p1.flags ??= {};
               <div id="fatigueBar" style="height:100%; width:0%; background:rgba(149,255,176,0.35);"></div>
             </div>
             <div class="p1-label" style="margin-top:8px; opacity:0.75;">Holding Ping builds fatigue and heat. Vent with taps, cool with upgrades.</div>
+          </div>
+
+          
+
           </div>
 
           <div class="p1-panel p1-crt">
@@ -1588,13 +1590,19 @@ const frame = (t) => {
       api.setState(st);
       api.saveSoon();
       render();
-    }      ensureFatigueMeterUI();
-
+    }
 
     // Ping: tap + press-and-hold auto-ping
     const $ping = root.querySelector("#ping");
-    attachFastTap($ping, () => doPing(false));
-    attachHoldPing(
+    $ping.addEventListener("click", () => doPing(false));
+    // Fast tap on iOS without interfering with press-and-hold
+    $ping.addEventListener("touchend", (e) => {
+      // If we were holding, attachHoldPing will handle stop.
+      if (api.getState()?.phases?.phase1?._holdingPing) return;
+      e.preventDefault();
+      doPing(false);
+    }, { passive: false });
+attachHoldPing(
       $ping,
       (fromHold) => doPing(!!fromHold),
       () => {
@@ -2030,8 +2038,6 @@ function render() {
       // Ensure scopes render even if RAF is throttled on mobile
       drawScope(p1, 0.016);
       drawOsc(p1, 0.016);
-      ensureFatigueMeterUI();
-      drawFatigueMeter(p1);
 $comms.textContent = (p1.comms || []).join("\n");
       $tx.textContent = (p1.transmission || []).join("\n");
 

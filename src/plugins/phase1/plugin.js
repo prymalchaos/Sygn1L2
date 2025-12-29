@@ -85,7 +85,7 @@ function attachFastTap(el, handler) {
   );
 }
 
-function attachHoldPing(btn, doPing, getRate, canHold) {
+function attachHoldPing(btn, doPing, getRate, canHold, onHoldChange) {
   if (!btn) return () => {};
   let holding = false;
   let timer = 0;
@@ -93,6 +93,7 @@ function attachHoldPing(btn, doPing, getRate, canHold) {
   const stop = () => {
     holding = false;
     vis.holdPing = false;
+    try { onHoldChange?.(false); } catch {}
     // let holdPower cool via frame loop
     if (timer) clearInterval(timer);
     timer = 0;
@@ -108,12 +109,14 @@ function attachHoldPing(btn, doPing, getRate, canHold) {
     // Gate hold until unlocked
     if (canHold && !canHold()) {
       // Call with fromHold=true so wrapper can show the unlock popup without pinging
+      try { onHoldChange?.(false); } catch {}
       doPing(true);
       return;
     }
 
     holding = true;
     vis.holdPing = true;
+    try { onHoldChange?.(true); } catch {}
     vis.holdPower = Math.max(vis.holdPower || 0, 0.25);
 
     try { btn.setPointerCapture?.(e.pointerId); } catch {}
@@ -357,7 +360,7 @@ export default {
     
     function ensureFatigueMeterUI() {
       if (root.querySelector("#fatigueMeter")) return;
-      const osc = root.querySelector("#oscilloscope") || root.querySelector("#osc");
+      const osc = root.querySelector("#oscCanvas") || root.querySelector("#oscilloscope") || root.querySelector("#osc") || root.querySelector(".p1-osccanvas");
       if (!osc) return;
 
       // Try to insert next to the oscilloscope panel
@@ -916,6 +919,11 @@ p1.flags ??= {};
       </div>
     </div>
     `;
+
+      // Ensure fatigue UI exists once panels have been rendered
+      ensureFatigueMeterUI();
+      // Some browsers hydrate layout a tick later; try again next microtask
+      queueMicrotask(() => ensureFatigueMeterUI());
 
 
     // Bottom leaderboard buttons
@@ -1578,27 +1586,32 @@ const frame = (t) => {
     attachFastTap($ping, () => doPing(false));
     attachHoldPing(
       $ping,
+      (fromHold) => doPing(!!fromHold),
       () => {
         const st = api.getState();
         const p1 = st.phases.phase1;
         const baseRate = 7; // pings/sec
         const lvl = (p1.upgrades?.pingBoost || 0);
-        const rate = baseRate * (1 + lvl * 0.12);
-        // As fatigue rises, holding slows a bit automatically (soft cap).
+        let rate = baseRate * (1 + lvl * 0.12);
+
+        // As fatigue rises, holding slows a bit (soft cap).
         const fatigue = clamp(p1.hold?.fatigue || 0, 0, 1);
-        const slowMult = 1 + fatigue * 0.9;
-        return (1000 / Math.max(1, rate)) * slowMult;
+        rate = rate / (1 + fatigue * 0.9);
+
+        return Math.max(1, rate);
       },
-      () => doPing(true),
+      () => {
+        const st = api.getState();
+        const p1 = st.phases.phase1;
+        return !!(p1.upgrades?.holdPing);
+      },
       (on) => {
         const st = api.getState();
         st.phases.phase1._holdingPing = !!on;
         api.setState(st);
       }
     );
-
-
-    root.querySelector("#purge").onclick = () => doPurge();
+root.querySelector("#purge").onclick = () => doPurge();
 
     // Dev tools
     if (isDev) {

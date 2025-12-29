@@ -402,7 +402,8 @@ export default {
           <div class="p1-title">FATIGUE</div>
           <div class="p1-label" id="fatigueEta" style="opacity:0.75;">--</div>
         </div>
-        <canvas id="fatigueMeter" width="160" height="110" style="width:100%; height:110px; display:block; margin-top:8px;"></canvas>
+        <!-- Fatigue meter canvas: square via aspect-ratio. Keep width 100% for responsive sizing. -->
+        <canvas id="fatigueMeter" width="160" height="160" style="width:100%; aspect-ratio:1 / 1; height:auto; display:block; margin-top:8px;"></canvas>
       `;
 
       // Insert after osc panel
@@ -854,7 +855,8 @@ p1.flags ??= {};
                   <div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">UV METER</div>
                   <div class="p1-label" id="fatigueEta" style="opacity:0.75;">--</div>
                 </div>
-                <canvas id="fatigueMeter" width="160" height="110" style="width:100%; height:110px; display:block; margin-top:8px; border-radius:12px;"></canvas>
+                <!-- Fatigue meter canvas: square via aspect-ratio. Use width/height 160 for intrinsic resolution. -->
+                <canvas id="fatigueMeter" width="160" height="160" style="width:100%; aspect-ratio:1 / 1; height:auto; display:block; margin-top:8px; border-radius:12px;"></canvas>
                 <div class="p1-label" style="margin-top:6px; opacity:0.70; font-size:11px;">
                   Holding Ping builds fatigue and heat. Vent with taps.
                 </div>
@@ -1616,29 +1618,68 @@ const frame = (t) => {
     // behaves exclusively as a hold to accumulate signal. Holding builds
     // fatigue over time and reduces power.
     const $ping = root.querySelector("#ping");
-    attachHoldPing(
-      $ping,
-      () => doPing(),
-      () => {
-        // Base rate of pings/sec. Upgrades can modify this. Fatigue soft-caps
-        // the rate via attachHoldPing's logic.
+    // Custom hold handler. Instead of using attachHoldPing, we implement our own
+    // press‑and‑hold logic using mouse/touch events. This ensures holding
+    // functions correctly even in environments that do not emit pointer events.
+    if ($ping) {
+      let holdTimer = null;
+      // Compute the current ping rate (pings/sec), modified by upgrades and
+      // fatigue. Matches the logic previously passed to attachHoldPing.
+      const computePingRate = () => {
         const st = api.getState();
         const p1 = st.phases.phase1;
-        const baseRate = 7; // pings/sec
-        const lvl = (p1.upgrades?.pingBoost || 0);
+        const baseRate = 7;
+        const lvl = p1.upgrades?.pingBoost || 0;
         let rate = baseRate * (1 + lvl * 0.12);
-        // As fatigue rises, holding slows a bit (soft cap).
         const fatigue = clamp(p1.hold?.fatigue || 0, 0, 1);
         rate = rate / (1 + fatigue * 0.9);
         return Math.max(1, rate);
-      },
-      () => true,
-      (on) => {
+      };
+      const startHold = () => {
+        if (holdTimer) return;
+        // mark holding state
         const st = api.getState();
-        st.phases.phase1._holdingPing = !!on;
+        const p1 = st.phases.phase1;
+        p1._holdingPing = true;
         api.setState(st);
-      }
-    );
+        // visuals: enable hold indicators
+        vis.holdPing = true;
+        vis.holdPower = Math.max(vis.holdPower || 0, 0.25);
+        // immediate ping for responsiveness
+        doPing();
+        const rate = computePingRate();
+        const interval = Math.max(25, Math.floor(1000 / rate));
+        holdTimer = setInterval(() => {
+          doPing();
+          vis.holdPower = Math.min(1.0, (vis.holdPower || 0) + 0.08);
+        }, interval);
+      };
+      const stopHold = () => {
+        if (!holdTimer) return;
+        clearInterval(holdTimer);
+        holdTimer = null;
+        // mark holding state off
+        const st = api.getState();
+        const p1 = st.phases.phase1;
+        p1._holdingPing = false;
+        api.setState(st);
+        vis.holdPing = false;
+      };
+      // Attach event listeners for mouse and touch. Use passive:false on start
+      // events to allow preventDefault and avoid unintended scroll/zoom.
+      $ping.addEventListener("mousedown", (e) => {
+        try { e.preventDefault(); } catch {}
+        startHold();
+      });
+      $ping.addEventListener("mouseup", stopHold);
+      $ping.addEventListener("mouseleave", stopHold);
+      $ping.addEventListener("touchstart", (e) => {
+        try { e.preventDefault(); } catch {}
+        startHold();
+      }, { passive: false });
+      $ping.addEventListener("touchend", stopHold);
+      $ping.addEventListener("touchcancel", stopHold);
+    }
 
     // Removed fallback click handler. Hold detection is now handled by
     // pointer, touch, and mouse events within attachHoldPing. This ensures

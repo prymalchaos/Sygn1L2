@@ -124,7 +124,12 @@ function attachHoldPing(btn, doPing, getRate, canHold, onHoldChange) {
     // immediate ping for responsiveness
     doPing(true);
 
-    const rate = Math.max(1, getRate()); // pings/sec
+    let rate = 7;
+    try {
+      rate = Number(getRate?.());
+    } catch {}
+    if (!Number.isFinite(rate) || rate <= 0) rate = 7;
+    rate = Math.max(1, rate); // pings/sec
     const interval = Math.max(25, Math.floor(1000 / rate));
 
     timer = setInterval(() => {
@@ -140,7 +145,11 @@ function attachHoldPing(btn, doPing, getRate, canHold, onHoldChange) {
   btn.style.webkitTouchCallout = "none";
 
   btn.addEventListener("pointerdown", start, { passive: false });
+  // iOS Safari can be flaky with Pointer Events during long-press; add touch fallbacks.
+  btn.addEventListener("touchstart", (e) => start(e.changedTouches?.[0] ? { ...e, pointerId: 1, preventDefault: () => e.preventDefault(), stopPropagation: () => e.stopPropagation() } : e), { passive: false });
   btn.addEventListener("pointerup", stop, { passive: true });
+  btn.addEventListener("touchend", stop, { passive: true });
+  btn.addEventListener("touchcancel", stop, { passive: true });
   btn.addEventListener("pointercancel", stop, { passive: true });
   btn.addEventListener("pointerleave", stop, { passive: true });
 
@@ -1579,7 +1588,8 @@ const frame = (t) => {
       api.setState(st);
       api.saveSoon();
       render();
-    }
+    }      ensureFatigueMeterUI();
+
 
     // Ping: tap + press-and-hold auto-ping
     const $ping = root.querySelector("#ping");
@@ -2020,6 +2030,8 @@ function render() {
       // Ensure scopes render even if RAF is throttled on mobile
       drawScope(p1, 0.016);
       drawOsc(p1, 0.016);
+      ensureFatigueMeterUI();
+      drawFatigueMeter(p1);
 $comms.textContent = (p1.comms || []).join("\n");
       $tx.textContent = (p1.transmission || []).join("\n");
 

@@ -5,6 +5,31 @@ import { loadSave, saveState } from "./save.js";
 import { supabase } from "./supabaseClient.js";
 import { debounce } from "./debounce.js";
 
+function installMobileGuards() {
+  // iOS Safari can still zoom on double-tap even with viewport settings.
+  // Block it globally so rapid tapping doesn't zoom the game UI.
+  let lastTouchEnd = 0;
+
+  document.addEventListener("touchend", (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  // Prevent pinch-zoom gestures
+  document.addEventListener("gesturestart", (e) => e.preventDefault(), { passive: false });
+  document.addEventListener("gesturechange", (e) => e.preventDefault(), { passive: false });
+  document.addEventListener("gestureend", (e) => e.preventDefault(), { passive: false });
+
+  // Prevent long-press text selection/callouts globally
+  document.documentElement.style.webkitTouchCallout = "none";
+  document.documentElement.style.webkitUserSelect = "none";
+  document.documentElement.style.userSelect = "none";
+}
+
+
 const AUTOSAVE_MS = 45_000;
 const TICK_MS_ACTIVE = 33; // ~30fps active
 const TICK_MS_HIDDEN = 250; // battery when hidden

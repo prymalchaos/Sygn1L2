@@ -1,4 +1,9 @@
 export function createShell(root) {
+  // Read the exposed build version (if any). This is set in pluginLoader.js as
+  // window.SYGN_BUILD and used as a cache-busting marker for users to verify
+  // that the latest code is loaded. If undefined, version will be empty.
+  const version = (typeof window !== "undefined" && window.SYGN_BUILD) ? window.SYGN_BUILD : "";
+
   root.innerHTML = `
     <style>
       #shell {
@@ -32,9 +37,20 @@ export function createShell(root) {
         font-weight: 700;
         font-size: 12px;
       }
+      #shell h1 .version {
+        opacity: 0.65;
+        font-weight: 600;
+        font-size: 10px;
+        margin-left: 8px;
+        letter-spacing: 0.02em;
+      }
     </style>
     <div id="shell">
-      <h1><span>SYGN1L2</span><span class="mark">CONSOLE</span></h1>
+      <h1>
+        <span>SYGN1L2</span>
+        <span class="mark">CONSOLE</span>
+        ${version ? `<span class="version">${version}</span>` : ""}
+      </h1>
       <div id="plugin"></div>
     </div>
   `;

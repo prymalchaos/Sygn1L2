@@ -4,7 +4,16 @@
 // Bump BUILD to force fresh plugin loads.
 
 const plugins = new Map();
-const BUILD = "2025-12-29f";
+const BUILD = "2025-12-29g";
+
+// Expose the current build/version on the window for the UI shell to display.
+if (typeof window !== "undefined") {
+  try {
+    window.SYGN_BUILD = BUILD;
+  } catch {
+    /* no-op for non-browser environments */
+  }
+}
 
 export async function loadPlugins() {
   const pluginIds = [

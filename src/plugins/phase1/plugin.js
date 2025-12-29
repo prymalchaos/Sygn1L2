@@ -862,13 +862,6 @@ p1.flags ??= {};
     function showPopup(speaker, msg) {
       if (!$popupRail) return;
 
-      // Cooldown: prevent repeated identical popups from spamming (esp. after resume/offline).
-      const key = `${speaker}::${msg}`;
-      const now = Date.now();
-      const last = popState.lastByKey[key] || 0;
-      if (now - last < 12000) return; // 12s per identical popup
-      popState.lastByKey[key] = now;
-
       const el = document.createElement("div");
       el.className = "p1-popup";
 
@@ -1450,18 +1443,43 @@ const $scope = root.querySelector("#scope");
     const defeatBody = root.querySelector("#defeatBody");
     const restartBtn = root.querySelector("#restart");
 
-    restartBtn.onclick = () => {
+    attachFastTap(restartBtn, () => {
       const st = api.getState();
       const p1 = st.phases.phase1;
 
+      // Preserve best time-trial record if present
+      const keepBest = p1.timeTrial?.bestMs ?? null;
+
+      // Hard reset Phase 1 run state
       p1.isDefeated = false;
       p1.corruption = 0;
       p1.signal = 0;
       p1.signalPerSecond = 1;
       p1.pingPower = 5;
+
       p1.winHoldMs = 0;
       p1.completed = false;
+
+      // Reset upgrades (fresh run)
       p1.upgrades = { spsBoost: 0, pingBoost: 0, spsMult: 0, noiseCanceller: 0, purgeEfficiency: 0 };
+
+      // Reset warning cooldowns/flags so UI doesn't spam on resume
+      p1.warnFlags = { c25: false, c50: false, c75: false };
+      p1.warnCooldownUntil = 0;
+
+      // Reset time trial run bookkeeping (keep best)
+      p1.timeTrial ??= { bestMs: keepBest, lastMs: null, runId: 0, submittedRunId: null };
+      p1.timeTrial.bestMs = keepBest;
+      p1.timeTrial.lastMs = null;
+      p1.timeTrial.runId = (p1.timeTrial.runId || 0) + 1;
+      p1.timeTrial.submittedRunId = null;
+
+      // Run lifecycle
+      p1.run = { state: "running", startedAt: Date.now(), completedAt: null };
+
+      // Win flags
+      p1.win = { achieved: false, handled: false, achievedAt: null };
+
       p1.comms = [];
       p1.transmission = [];
       pushLog(p1.comms, "CONTROL//RETURN  Signal lock re-established. Phase restarted.");
@@ -1469,9 +1487,10 @@ const $scope = root.querySelector("#scope");
 
       api.setState(st);
       api.saveSoon();
+
       defeatOverlay.style.display = "none";
       render();
-    };
+    });
 
     continueBtn.onclick = async () => {
       const st = api.getState();

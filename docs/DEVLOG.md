@@ -318,3 +318,27 @@
 ## 2025-12-29 (Sydney) – Fix: Restart Phase button on SYSTEM FAILURE
 - Restart button now uses attachFastTap (pointer-driven) instead of onclick (avoids iOS click suppression).
 - Restart now resets run lifecycle/time-trial bookkeeping and clears warning cooldown flags.
+
+
+## 2025-12-29 (Sydney) – Popup spam fix + Hold-to-Ping unlock + Fatigue HUD
+**Popups**
+- Popups trigger only for explicit `SPEAKER//POPUP ...` lines (no more auto-popup for every COMMS line).
+- Added popup rate limiting: per-message cooldown (12s) + global minimum gap (0.9s).
+
+**Hold Ping**
+- Press-and-hold Ping is now locked behind a first upgrade: **Hold-Press Actuator**.
+- Added **Thermal Bleed Valve** upgrade to increase fatigue cooloff speed.
+
+**Fatigue**
+- Added a Fatigue HUD panel with a bar + % that fades as fatigue cools off.
+- Implemented passive fatigue decay over time (scaled by Thermal Bleed Valve).
+
+**Balance**
+- Slightly increased fatigue build and hold heat to keep Phase 1 challenging.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js
+- src/pluginLoader.js
+- docs/DEVLOG.md
+- docs/CHANGELOG.md

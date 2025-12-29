@@ -127,3 +127,12 @@
 ### Fixed
 - SYSTEM FAILURE: Restart Phase button now works reliably on mobile (tap/hold protection + proper state reset).
 
+## [2025-12-29d] - 2025-12-29
+### Added
+- Phase 1: Hold-Press Actuator (unlocks hold-to-ping) and Thermal Bleed Valve (faster fatigue cooloff).
+- Phase 1: Fatigue HUD (bar + %).
+### Fixed
+- Popup spam reduced: popups now require explicit `//POPUP` lines + cooldown/rate limit.
+### Changed
+- Hold ping balance: slightly higher fatigue/heat.
+

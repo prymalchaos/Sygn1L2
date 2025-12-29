@@ -1640,16 +1640,10 @@ const frame = (t) => {
       }
     );
 
-    // Fallback click handler: allow a quick click to trigger a single ping. While
-    // the primary interaction is press‑and‑hold, some environments or devices
-    // may not fire pointer events reliably. This handler ensures the button
-    // still responds when tapped or clicked.
-    if ($ping) {
-      $ping.addEventListener("click", (e) => {
-        e.preventDefault();
-        doPing();
-      });
-    }
+    // Removed fallback click handler. Hold detection is now handled by
+    // pointer, touch, and mouse events within attachHoldPing. This ensures
+    // that pressing and holding on devices lacking PointerEvent support will
+    // still trigger repeated pings via the mousedown/mouseup fallback.
 root.querySelector("#purge").onclick = () => doPurge();
 
     // Dev tools

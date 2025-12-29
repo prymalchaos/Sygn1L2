@@ -123,8 +123,7 @@
 ### Changed
 - Phase 1 hold-to-ping balanced with fatigue (diminishing ping power + extra heat + slight rate slow).
 
-## [2025-12-29e] - 2025-12-29
+## [2025-12-29d] - 2025-12-29
 ### Fixed
-- Prevent repeated identical popups from spamming (cooldown).
-- Re-enabled robust double-tap/gesture zoom suppression on mobile.
+- SYSTEM FAILURE: Restart Phase button now works reliably on mobile (tap/hold protection + proper state reset).
 

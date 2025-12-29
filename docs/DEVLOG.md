@@ -358,3 +358,16 @@
 - src/pluginLoader.js
 - docs/DEVLOG.md
 - docs/CHANGELOG.md
+
+
+## 2025-12-29 (Sydney) – Hotfix: restore hold-to-ping + ensure fatigue VU meter renders
+**Fixes**
+- Replaced broken `attachHoldPing()` implementation (undefined refs prevented hold ping from firing).
+- Fatigue VU meter is now injected at runtime next to the oscilloscope and rendered each frame.
+
+**Files touched**
+- src/plugins/phase1/plugin.js
+- src/core/pluginLoader.js
+- src/pluginLoader.js
+- docs/DEVLOG.md
+- docs/CHANGELOG.md

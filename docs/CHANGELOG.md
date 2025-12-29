@@ -143,3 +143,8 @@
 ### Added
 - Analogue VU-style fatigue meter with cooloff ETA.
 
+## [2025-12-29f] - 2025-12-29
+### Fixed
+- Phase 1: hold-to-ping works again after unlock.
+- Phase 1: fatigue VU meter reliably appears (runtime injection) and updates.
+

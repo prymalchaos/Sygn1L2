@@ -624,20 +624,21 @@ p1.flags ??= {};
           white-space: pre-wrap;
         }
       
-        .p1-scopecanvas {
+        /* Make the scope, oscilloscope, and fatigue canvases square. Using
+           aspect-ratio keeps their height equal to their width so they
+           maintain a square shape regardless of the layout. */
+        .p1-scopecanvas,
+        .p1-osccanvas,
+        #fatigueMeter {
           width: 100%;
-          height: 110px;
-          display:block;
+          aspect-ratio: 1 / 1;
+          height: auto;
+          display: block;
           border-radius: 12px;
         }
-        .p1-osccanvas {
-          width: 100%;
-          height: 240px;
-          display:block;
-          border-radius: 12px;
-        }
+        /* Remove fixed heights for responsive square sizing */
         @media (max-width: 740px){
-          .p1-osccanvas { height: 180px; }
+          /* no override needed; aspect-ratio will maintain square canvases */
         }
 
 

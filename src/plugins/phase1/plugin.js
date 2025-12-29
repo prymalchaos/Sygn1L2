@@ -862,6 +862,13 @@ p1.flags ??= {};
     function showPopup(speaker, msg) {
       if (!$popupRail) return;
 
+      // Cooldown: prevent repeated identical popups from spamming (esp. after resume/offline).
+      const key = `${speaker}::${msg}`;
+      const now = Date.now();
+      const last = popState.lastByKey[key] || 0;
+      if (now - last < 12000) return; // 12s per identical popup
+      popState.lastByKey[key] = now;
+
       const el = document.createElement("div");
       el.className = "p1-popup";
 

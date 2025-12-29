@@ -92,7 +92,8 @@ function attachHoldPing(btn, doPing, getRate, canHold) {
 
   const stop = () => {
     holding = false;
-    try { onHoldChange?.(false); } catch {}
+    vis.holdPing = false;
+    // let holdPower cool via frame loop
     if (timer) clearInterval(timer);
     timer = 0;
   };
@@ -101,19 +102,32 @@ function attachHoldPing(btn, doPing, getRate, canHold) {
     // prevent iOS text selection/callout
     e.preventDefault();
     e.stopPropagation();
+
     if (holding) return;
+
+    // Gate hold until unlocked
+    if (canHold && !canHold()) {
+      // Call with fromHold=true so wrapper can show the unlock popup without pinging
+      doPing(true);
+      return;
+    }
+
     holding = true;
-    try { onHoldChange?.(true); } catch {}
+    vis.holdPing = true;
+    vis.holdPower = Math.max(vis.holdPower || 0, 0.25);
 
     try { btn.setPointerCapture?.(e.pointerId); } catch {}
 
-    // immediate tick
-    onTick(true);
+    // immediate ping for responsiveness
+    doPing(true);
 
-    const interval = Math.max(25, Math.floor(getIntervalMs()));
+    const rate = Math.max(1, getRate()); // pings/sec
+    const interval = Math.max(25, Math.floor(1000 / rate));
+
     timer = setInterval(() => {
       if (!holding) return;
-      onTick(true);
+      doPing(true);
+      vis.holdPower = Math.min(1.0, (vis.holdPower || 0) + 0.08);
     }, interval);
   };
 
@@ -122,7 +136,6 @@ function attachHoldPing(btn, doPing, getRate, canHold) {
   btn.style.userSelect = "none";
   btn.style.webkitTouchCallout = "none";
 
-  // IMPORTANT: pointerdown must be non-passive so preventDefault works on iOS
   btn.addEventListener("pointerdown", start, { passive: false });
   btn.addEventListener("pointerup", stop, { passive: true });
   btn.addEventListener("pointercancel", stop, { passive: true });
@@ -341,7 +354,109 @@ export default {
   mount(root, api) {
 
     // Time trial / leaderboard helpers (scoped to Phase 1 mount)
-    function formatMs(ms) {
+    
+    function ensureFatigueMeterUI() {
+      if (root.querySelector("#fatigueMeter")) return;
+      const osc = root.querySelector("#oscilloscope") || root.querySelector("#osc");
+      if (!osc) return;
+
+      // Try to insert next to the oscilloscope panel
+      const oscPanel = osc.closest(".p1-panel") || osc.parentElement;
+      const row = oscPanel?.parentElement;
+      if (!row) return;
+
+      const panel = document.createElement("div");
+      panel.className = "p1-panel p1-crt";
+      panel.style.flex = "0 0 160px";
+      panel.style.minWidth = "140px";
+      panel.style.maxWidth = "180px";
+
+      panel.innerHTML = `
+        <div class="p1-row" style="justify-content:space-between;">
+          <div class="p1-title">FATIGUE</div>
+          <div class="p1-label" id="fatigueEta" style="opacity:0.75;">--</div>
+        </div>
+        <canvas id="fatigueMeter" width="160" height="110" style="width:100%; height:110px; display:block; margin-top:8px;"></canvas>
+      `;
+
+      // Insert after osc panel
+      row.insertBefore(panel, oscPanel.nextSibling);
+    }
+
+    function drawFatigueMeter(p1) {
+      const c = root.querySelector("#fatigueMeter");
+      if (!c) return;
+      const ctx = c.getContext("2d");
+      if (!ctx) return;
+
+      const w = c.width, h = c.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const f = clamp((p1.hold?.fatigue || 0), 0, 1);
+
+      // Dial geometry
+      const cx = w * 0.5;
+      const cy = h * 0.95;
+      const r = Math.min(w, h) * 0.85;
+
+      // Background arc
+      ctx.globalAlpha = 0.20;
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, Math.PI * 1.05, Math.PI * 1.95);
+      ctx.strokeStyle = "rgba(215,255,224,0.25)";
+      ctx.stroke();
+
+      // Tick marks
+      ctx.globalAlpha = 0.25;
+      ctx.lineWidth = 2;
+      for (let i = 0; i <= 10; i++) {
+        const t = i / 10;
+        const a = Math.PI * (1.05 + 0.90 * t);
+        const x1 = cx + Math.cos(a) * (r - 14);
+        const y1 = cy + Math.sin(a) * (r - 14);
+        const x2 = cx + Math.cos(a) * (r - 4);
+        const y2 = cy + Math.sin(a) * (r - 4);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = "rgba(215,255,224,0.28)";
+        ctx.stroke();
+      }
+
+      // Needle
+      const a = Math.PI * (1.05 + 0.90 * f);
+      const nx = cx + Math.cos(a) * (r - 18);
+      const ny = cy + Math.sin(a) * (r - 18);
+
+      ctx.globalAlpha = 0.90;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(nx, ny);
+      ctx.strokeStyle = "rgba(215,255,224,0.95)";
+      ctx.stroke();
+
+      // Hub
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(215,255,224,0.55)";
+      ctx.fill();
+
+      // ETA text (time to cool to ~0)
+      const etaEl = root.querySelector("#fatigueEta");
+      if (etaEl) {
+        const lvl = (p1.upgrades?.fatigueCooler || 0);
+        const mult = 1 + lvl * 0.20;
+        const decay = TUNE.holdFatigueDecayPerSec * mult;
+        const secs = decay > 0 ? (f / decay) : 0;
+        if (f < 0.02) etaEl.textContent = "COOL";
+        else if (secs < 60) etaEl.textContent = `${Math.ceil(secs)}s`;
+        else etaEl.textContent = `${Math.ceil(secs / 60)}m`;
+      }
+    }
+function formatMs(ms) {
       if (ms == null) return "--:--.-";
       const total = Math.max(0, Math.floor(ms));
       const m = Math.floor(total / 60000);

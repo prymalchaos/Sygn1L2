@@ -230,6 +230,9 @@ function startTickLoop() {
 
 
 async function start() {
+  // Install global mobile guards immediately to prevent double‑tap zoom and callouts on iOS/Android
+  installMobileGuards();
+
   await loadPlugins();
 
   // Capture current auth user (if any) so we know who state belongs to.

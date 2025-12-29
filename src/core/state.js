@@ -50,7 +50,9 @@ export function createDefaultState() {
           noiseCanceller: 0,
           purgeEfficiency: 0,
           autopilotCore: 0,
+        },
 
+        // Autopilot tuning (separate from upgrade levels)
         autopilot: {
           unlocked: false,
           enabled: false,
@@ -59,28 +61,31 @@ export function createDefaultState() {
           offlineCap: 95,
           budget: 0,
         },
-        },
-      },
 
-      // Phase 2: Engineering Bay prototype (Power + Heat + Reroute)
+        // Time trial tracking
         timeTrial: {
           bestMs: null,
           lastMs: null,
           runId: 0,
           submittedRunId: null,
         },
+
+        // Win flags
         win: {
           achieved: false,
           handled: false,
           achievedAt: null,
         },
 
+        // Current run state (used for live timers and loops)
         run: {
           state: "running",
           startedAt: null,
           completedAt: null,
         },
+      },
 
+      // Phase 2: Engineering Bay prototype (Power + Heat + Reroute)
       phase2: {
         bootedAt: now,
 

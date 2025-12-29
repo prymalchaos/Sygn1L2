@@ -1639,6 +1639,17 @@ const frame = (t) => {
         api.setState(st);
       }
     );
+
+    // Fallback click handler: allow a quick click to trigger a single ping. While
+    // the primary interaction is press‑and‑hold, some environments or devices
+    // may not fire pointer events reliably. This handler ensures the button
+    // still responds when tapped or clicked.
+    if ($ping) {
+      $ping.addEventListener("click", (e) => {
+        e.preventDefault();
+        doPing();
+      });
+    }
 root.querySelector("#purge").onclick = () => doPurge();
 
     // Dev tools
@@ -2043,6 +2054,13 @@ function render() {
       $hint.textContent = `Corruption rate: ${rate.toFixed(2)}/s • Purge: -${Math.floor(purgeA)}% for ${nfmt(purgeC)} signal • ${winProgressText(p1)}`;
 
       renderShop();
+
+      // Update fatigue HUD and meter. These functions are defined in this
+      // module but weren’t previously invoked, which left the VU meter blank.
+      try {
+        renderFatigue(p1);
+        drawFatigueMeter(p1);
+      } catch {}
 
       
       // Ensure scopes render even if RAF is throttled on mobile

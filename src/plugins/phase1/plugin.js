@@ -825,6 +825,8 @@ p1.flags ??= {};
               <!-- Fatigue meter canvas. Match dimensions with oscMini for consistent sizing -->
               <canvas id="fatigueMeter" width="160" height="110" style="flex:1; width:100%; height:110px; display:block; border-radius:10px;"></canvas>
             </div>
+            <!-- Small timer showing the current run time. Positioned between the gauge row and the ping/purge buttons. -->
+            <div id="pingTimer" style="margin-top:8px; text-align:center; font-weight:900; font-size:16px; letter-spacing:0.04em; opacity:0.90;">00:00.0</div>
             <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
               <button id="ping" class="p1-btn" style="flex:1; min-width:160px;">Ping</button>
               <button id="purge" class="p1-btn" style="flex:1; min-width:160px;">Purge</button>
@@ -832,42 +834,12 @@ p1.flags ??= {};
             <div id="hint" style="margin-top:8px; font-size:12px; opacity:0.85;"></div>
           </div>
 
-          <!-- Main scope moved above the time trial panel -->
-          <div class="p1-panel p1-crt" style="margin-top:12px;">
-            <div class="p1-title">SCOPE</div>
-            <div class="p1-scopebox p1-curved">
-              <div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
-                <div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">SCOPE</div>
-                <div style="font-size:12px; opacity:0.75;">Flow</div>
-              </div>
-              <canvas id="scopeCanvas" class="p1-scopecanvas"></canvas>
-            </div>
-          </div>
+          <!-- Main scope removed: the mini oscilloscope gauge above provides sufficient signal feedback. -->
 
-          <div class="p1-panel p1-crt" style="margin-top:12px;">
-            <div class="p1-row" style="justify-content:space-between;">
-              <div class="p1-title">TIME TRIAL</div>
-              <div class="p1-label" style="opacity:0.75;">PHASE 1</div>
-            </div>
-            <div class="p1-row" style="margin-top:8px; gap:12px;">
-              <div class="p1-stat"><div class="p1-label">RUN</div><div class="p1-value" id="ttRun">00:00.0</div></div>
-              <div class="p1-stat"><div class="p1-label">LAST</div><div class="p1-value" id="ttLast">--:--.-</div></div>
-              <div class="p1-stat"><div class="p1-label">BEST</div><div class="p1-value" id="ttBest">--:--.-</div></div>
-            </div>
-          </div>
+          <!-- Time Trial panel removed from this position; it will be inserted below the COMMS + TRANSMISSION panel. -->
 
-          <!-- The large oscilloscope panel is now placed here below the Time Trial card. -->
-          <div class="p1-panel p1-crt" style="margin-top:12px;">
-            <div class="p1-title">OSC</div>
-            <div class="p1-scopebox p1-curved">
-              <div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
-                <div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">OSCILLOSCOPE</div>
-                <div style="font-size:12px; opacity:0.75;">Synchronicity <span id="syncPct">0</span>%</div>
-              </div>
-              <canvas id="oscCanvas" class="p1-osccanvas"></canvas>
-            </div>
-          </div>
-          <!-- Removed the p1-two grid of scope/osc/fatigue panels. The mini oscilloscope and fatigue meter are shown above the ping button. -->
+          <!-- Removed the large oscilloscope panel; mini oscilloscope appears next to the fatigue meter. -->
+          <!-- Removed the p1-two grid of scope/osc/fatigue panels. -->
 
           <div class="p1-panel p1-crt">
             <div class="p1-title">UPGRADES</div>
@@ -888,6 +860,19 @@ p1.flags ??= {};
                 <div style="font-weight:900; font-size:12px; opacity:0.85;">TRANSMISSION</div>
                 <div id="txBox" class="p1-logbox p1-mono"></div>
               </div>
+            </div>
+          </div>
+
+          <!-- Time Trial panel moved here, below the COMMS + TRANSMISSION panel -->
+          <div class="p1-panel p1-crt" style="margin-top:12px;">
+            <div class="p1-row" style="justify-content:space-between;">
+              <div class="p1-title">TIME TRIAL</div>
+              <div class="p1-label" style="opacity:0.75;">PHASE 1</div>
+            </div>
+            <div class="p1-row" style="margin-top:8px; gap:12px;">
+              <div class="p1-stat"><div class="p1-label">RUN</div><div class="p1-value" id="ttRun">00:00.0</div></div>
+              <div class="p1-stat"><div class="p1-label">LAST</div><div class="p1-value" id="ttLast">--:--.-</div></div>
+              <div class="p1-stat"><div class="p1-label">BEST</div><div class="p1-value" id="ttBest">--:--.-</div></div>
             </div>
           </div>
 
@@ -1107,7 +1092,8 @@ p1.flags ??= {};
     const $oscMini = root.querySelector("#oscMini");
     const $syncPct = root.querySelector("#syncPct");
 
-    const $ttClock = root.querySelector("#ttClock");
+    // The time trial run clock is displayed via #ttRun and the ping timer; #ttClock is unused.
+    const $ttClock = null;
     const $ttBest = root.querySelector("#ttBest");
     const $ttLast = root.querySelector("#ttLast");
 
@@ -1254,8 +1240,9 @@ p1.flags ??= {};
       const f = clamp((p1.hold?.fatigue || 0), 0, 1);
 
       const cx = w * 0.5;
-      const cy = h * 0.95;
-      const r  = Math.min(w, h) * 0.85;
+      // Position the gauge slightly lower and shrink it so it fits cleanly in its block.
+      const cy = h * 0.90;
+      const r  = Math.min(w, h) * 0.70;
 
       ctx.globalAlpha = 0.18;
       ctx.lineWidth = 10;
@@ -1514,11 +1501,8 @@ function drawOsc(p1, dt) {
 
     // Resize canvases on layout changes
     const onResize = () => {
-      // Resize the main scope and large oscilloscope canvases. The mini osc
-      // canvas is handled dynamically in drawOscMini() to avoid layout
-      // cascading on scroll.
-      sizeCanvas($scopeCanvas);
-      sizeCanvas($oscCanvas);
+      // The main scope and large oscilloscope canvases have been removed.
+      // The mini oscilloscope gauge (#oscMini) is sized dynamically within drawOscMini().
     };
     window.addEventListener("resize", onResize);
     // iOS layout quirk: ensure canvases are sized after first paint
@@ -1634,14 +1618,16 @@ const $scope = root.querySelector("#scope");
     let rafId = 0;
     
     function updateRunClock(p1) {
-      const el = root.querySelector("#ttRun");
-      if (!el) return;
+      const runEl = root.querySelector("#ttRun");
+      const timerEl = root.querySelector("#pingTimer");
       p1.run ??= { state: "running", startedAt: (p1.bootedAt || Date.now()), completedAt: null };
       if (!p1.run.startedAt) p1.run.startedAt = p1.bootedAt || Date.now();
       const now = Date.now();
       const end = (p1.run.state === "completed" && p1.run.completedAt) ? p1.run.completedAt : now;
       const ms = Math.max(0, end - (p1.run.startedAt || p1.bootedAt || end));
-      el.textContent = formatMs(ms);
+      const text = formatMs(ms);
+      if (runEl) runEl.textContent = text;
+      if (timerEl) timerEl.textContent = text;
     }
 
 const frame = (t) => {
@@ -1670,10 +1656,10 @@ const frame = (t) => {
       const st = api.getState();
       const p1 = st.phases.phase1;
 
-      // Draw at ~30fps by skipping alternate frames on slow devices
-      drawScope(p1, dt);
-      drawOsc(p1, dt);
+      // Draw the mini oscilloscope and fatigue gauge each frame. The main scope and large
+      // oscilloscope have been removed, so only these two need updating here.
       drawOscMini(p1, dt);
+      drawFatigueMeter(p1);
 
       updateTimeTrialPanel(p1);
 
@@ -2089,12 +2075,15 @@ function maybeWarn(p1) {
 
 
     function updateTimeTrialPanel(p1) {
-      if (!$ttClock) return;
+      const runEl = root.querySelector("#ttRun");
+      const bestEl = root.querySelector("#ttBest");
+      const lastEl = root.querySelector("#ttLast");
+      if (!runEl || !bestEl || !lastEl) return;
       const now = Date.now();
       const runMs = Math.max(0, now - (p1.bootedAt || now));
-      $ttClock.textContent = fmtMs(runMs);
-      $ttBest.textContent = (p1.timeTrial?.bestMs == null) ? "--:--.--" : fmtMs(p1.timeTrial.bestMs);
-      $ttLast.textContent = (p1.timeTrial?.lastMs == null) ? "--:--.--" : fmtMs(p1.timeTrial.lastMs);
+      runEl.textContent = fmtMs(runMs);
+      bestEl.textContent = (p1.timeTrial?.bestMs == null) ? "--:--.--" : fmtMs(p1.timeTrial.bestMs);
+      lastEl.textContent = (p1.timeTrial?.lastMs == null) ? "--:--.--" : fmtMs(p1.timeTrial.lastMs);
     }
 
     function renderLeaderboardRows(rows) {
@@ -2243,9 +2232,8 @@ function render() {
       } catch {}
 
       
-      // Ensure scopes render even if RAF is throttled on mobile
-      drawScope(p1, 0.016);
-      drawOsc(p1, 0.016);
+      // Ensure the mini oscilloscope renders even if RAF is throttled on mobile
+      drawOscMini(p1, 0.016);
 $comms.textContent = (p1.comms || []).join("\n");
       $tx.textContent = (p1.transmission || []).join("\n");
 

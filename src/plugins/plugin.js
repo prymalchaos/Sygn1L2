@@ -628,8 +628,7 @@ p1.flags ??= {};
            aspect-ratio keeps their height equal to their width so they
            maintain a square shape regardless of the layout. */
         .p1-scopecanvas,
-        .p1-osccanvas,
-        #fatigueMeter {
+        .p1-osccanvas {
           width: 100%;
           aspect-ratio: 1 / 1;
           height: auto;

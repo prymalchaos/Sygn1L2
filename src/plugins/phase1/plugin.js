@@ -820,7 +820,7 @@ p1.flags ??= {};
 
             <!-- Row of small gauges: mini oscilloscope and fatigue meter. Both share the same aspect ratio and flex sizing. -->
             <div style="display:flex; gap:10px; margin-top:8px;">
-              <canvas id="oscCanvas" width="160" height="110" style="flex:1; aspect-ratio:16 / 11; height:auto; border-radius:10px;"></canvas>
+              <canvas id="oscMini" width="160" height="110" style="flex:1; aspect-ratio:16 / 11; height:auto; border-radius:10px;"></canvas>
               <canvas id="fatigueMeter" width="160" height="110" style="flex:1; aspect-ratio:16 / 11; height:auto; border-radius:10px;"></canvas>
             </div>
             <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
@@ -854,7 +854,18 @@ p1.flags ??= {};
             </div>
           </div>
 
-          <!-- Removed the p1-two grid of scope/osc/fatigue panels. The mini oscilloscope and fatigue meter are now shown above the ping button, and the large oscilloscope has been removed. -->
+          <!-- The large oscilloscope panel is now placed here below the Time Trial card. -->
+          <div class="p1-panel p1-crt" style="margin-top:12px;">
+            <div class="p1-title">OSC</div>
+            <div class="p1-scopebox p1-curved">
+              <div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
+                <div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">OSCILLOSCOPE</div>
+                <div style="font-size:12px; opacity:0.75;">Synchronicity <span id="syncPct">0</span>%</div>
+              </div>
+              <canvas id="oscCanvas" class="p1-osccanvas"></canvas>
+            </div>
+          </div>
+          <!-- Removed the p1-two grid of scope/osc/fatigue panels. The mini oscilloscope and fatigue meter are shown above the ping button. -->
 
           <div class="p1-panel p1-crt">
             <div class="p1-title">UPGRADES</div>
@@ -1088,7 +1099,10 @@ p1.flags ??= {};
     const $tx = root.querySelector("#txBox");
     
     const $scopeCanvas = root.querySelector("#scopeCanvas");
+    // Large oscilloscope canvas
     const $oscCanvas = root.querySelector("#oscCanvas");
+    // Mini oscilloscope canvas (shown next to the fatigue meter)
+    const $oscMini = root.querySelector("#oscMini");
     const $syncPct = root.querySelector("#syncPct");
 
     const $ttClock = root.querySelector("#ttClock");
@@ -1383,8 +1397,96 @@ function drawOsc(p1, dt) {
       ctx.globalAlpha = 1;
     }
 
+    // Draw the mini oscilloscope gauge. This uses the same rendering logic
+    // as drawOsc() but targets the smaller #oscMini canvas and omits the
+    // synchronicity label. Doubling of chaos and points is preserved.
+    function drawOscMini(p1, dt) {
+      if (!$oscMini) return;
+      const s = sizeCanvas($oscMini);
+      if (!s) return;
+      const { ctx, w, h } = s;
+
+      // Clear and background
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "rgba(1,3,2,0.15)";
+      ctx.fillRect(0, 0, w, h);
+
+      // Grid
+      ctx.globalAlpha = 0.18;
+      ctx.strokeStyle = "rgba(156,255,176,0.35)";
+      ctx.lineWidth = 1;
+      const step = 26;
+      for (let x = 0; x <= w; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+      for (let y = 0; y <= h; y += step) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Synchronicity calculation (unused label)
+      const winSignal = 12000;
+      const sync = Math.max(0, Math.min(100, (p1.signal / winSignal) * 100));
+      const corr = p1.corruption || 0;
+      // Double corruption influence
+      const chaos = (corr / 100) * 1.6;
+
+      const sync01 = sync / 100;
+      const targetPhi = Math.PI / 2;
+      const wander = (Math.sin(vis.t * 0.7) * 0.9 + Math.sin(vis.t * 1.3) * 0.4) * (1 - sync01);
+      const phi = targetPhi + wander;
+
+      // Slight distortion from corruption
+      const distort = 1 + chaos * 0.25;
+
+      const cx = w * 0.5, cy = h * 0.52;
+      const R = Math.min(w, h) * 0.36;
+
+      // Do not advance vis.t here; drawOsc() already updates it once per frame.
+
+      ctx.strokeStyle = "rgba(156,255,176,0.88)";
+      ctx.shadowColor = "rgba(156,255,176,0.35)";
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 1.4;
+
+      ctx.beginPath();
+      const pts = 1800;
+      for (let i = 0; i <= pts; i++) {
+        const t = (i / pts) * Math.PI * 2;
+        const x = Math.sin(t * distort);
+        const y = Math.sin((t * distort) + phi);
+
+        const jx = (Math.sin(t * 17 + vis.t * 5) * chaos) * 0.04;
+        const jy = (Math.cos(t * 19 + vis.t * 6) * chaos) * 0.04;
+
+        const px = cx + (x + jx) * R;
+        const py = cy + (y + jy) * R;
+
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+
+      // Reticle
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = "rgba(156,255,176,0.55)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy);
+      ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
     // Resize canvases on layout changes
-    const onResize = () => { sizeCanvas($scopeCanvas); sizeCanvas($oscCanvas); };
+    const onResize = () => {
+      sizeCanvas($scopeCanvas);
+      sizeCanvas($oscCanvas);
+      sizeCanvas($oscMini);
+    };
     window.addEventListener("resize", onResize);
     // iOS layout quirk: ensure canvases are sized after first paint
     setTimeout(onResize, 0);
@@ -1538,6 +1640,7 @@ const frame = (t) => {
       // Draw at ~30fps by skipping alternate frames on slow devices
       drawScope(p1, dt);
       drawOsc(p1, dt);
+      drawOscMini(p1, dt);
 
       updateTimeTrialPanel(p1);
 

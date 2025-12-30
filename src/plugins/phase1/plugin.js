@@ -820,8 +820,10 @@ p1.flags ??= {};
 
             <!-- Row of small gauges: mini oscilloscope and fatigue meter. Both share the same aspect ratio and flex sizing. -->
             <div style="display:flex; gap:10px; margin-top:8px;">
-              <canvas id="oscMini" width="160" height="110" style="flex:1; aspect-ratio:16 / 11; height:auto; border-radius:10px;"></canvas>
-              <canvas id="fatigueMeter" width="160" height="110" style="flex:1; aspect-ratio:16 / 11; height:auto; border-radius:10px;"></canvas>
+              <!-- Mini oscilloscope canvas. Use fixed CSS dimensions so resizing won't cascade -->
+              <canvas id="oscMini" width="160" height="110" style="flex:1; width:100%; height:110px; display:block; border-radius:10px;"></canvas>
+              <!-- Fatigue meter canvas. Match dimensions with oscMini for consistent sizing -->
+              <canvas id="fatigueMeter" width="160" height="110" style="flex:1; width:100%; height:110px; display:block; border-radius:10px;"></canvas>
             </div>
             <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
               <button id="ping" class="p1-btn" style="flex:1; min-width:160px;">Ping</button>
@@ -1308,9 +1310,22 @@ p1.flags ??= {};
 
 function drawOsc(p1, dt) {
       if (!$oscCanvas) return;
-      const s = sizeCanvas($oscCanvas);
-      if (!s) return;
-      const { ctx, w, h } = s;
+      // Dynamically size the main oscilloscope based on its CSS dimensions.
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const rect = $oscCanvas.getBoundingClientRect();
+      const cssW = Math.max(10, Math.floor(rect.width || 10));
+      const cssH = Math.max(10, Math.floor(rect.height || 10));
+      const pxW = Math.max(10, Math.floor(cssW * dpr));
+      const pxH = Math.max(10, Math.floor(cssH * dpr));
+      if ($oscCanvas.width !== pxW || $oscCanvas.height !== pxH) {
+        $oscCanvas.width = pxW;
+        $oscCanvas.height = pxH;
+      }
+      const ctx = $oscCanvas.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w = cssW;
+      const h = cssH;
 
       ctx.clearRect(0,0,w,h);
       ctx.fillStyle = "rgba(1,3,2,0.15)";
@@ -1402,9 +1417,25 @@ function drawOsc(p1, dt) {
     // synchronicity label. Doubling of chaos and points is preserved.
     function drawOscMini(p1, dt) {
       if (!$oscMini) return;
-      const s = sizeCanvas($oscMini);
-      if (!s) return;
-      const { ctx, w, h } = s;
+      // Compute dimensions based on the element's bounding rect. Avoid
+      // repeatedly calling sizeCanvas() for this small gauge because
+      // updating the canvas width attribute can affect layout. Instead,
+      // update the drawing buffer only when the pixel dimensions change.
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const rect = $oscMini.getBoundingClientRect();
+      const cssW = Math.max(10, Math.floor(rect.width || 10));
+      const cssH = Math.max(10, Math.floor(rect.height || 10));
+      const pxW = Math.max(10, Math.floor(cssW * dpr));
+      const pxH = Math.max(10, Math.floor(cssH * dpr));
+      if ($oscMini.width !== pxW || $oscMini.height !== pxH) {
+        $oscMini.width = pxW;
+        $oscMini.height = pxH;
+      }
+      const ctx = $oscMini.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w = cssW;
+      const h = cssH;
 
       // Clear and background
       ctx.clearRect(0, 0, w, h);
@@ -1483,9 +1514,11 @@ function drawOsc(p1, dt) {
 
     // Resize canvases on layout changes
     const onResize = () => {
+      // Resize the main scope and large oscilloscope canvases. The mini osc
+      // canvas is handled dynamically in drawOscMini() to avoid layout
+      // cascading on scroll.
       sizeCanvas($scopeCanvas);
       sizeCanvas($oscCanvas);
-      sizeCanvas($oscMini);
     };
     window.addEventListener("resize", onResize);
     // iOS layout quirk: ensure canvases are sized after first paint

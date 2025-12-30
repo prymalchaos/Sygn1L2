@@ -818,7 +818,9 @@ p1.flags ??= {};
               </div>
             </div>
 
-            <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+            <!-- Mini fatigue meter placed above the ping/purge buttons. Its display width is one third of the panel and it maintains the original 16:11 ratio. -->
+            <canvas id="fatigueMeter" width="160" height="110" style="width:33%; aspect-ratio:16 / 11; height:auto; display:block; margin-top:4px; border-radius:10px;"></canvas>
+            <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
               <button id="ping" class="p1-btn" style="flex:1; min-width:160px;">Ping</button>
               <button id="purge" class="p1-btn" style="flex:1; min-width:160px;">Purge</button>
             </div>
@@ -848,20 +850,7 @@ p1.flags ??= {};
               <div class="p1-scopebox p1-curved"><div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;"><div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">OSCILLOSCOPE</div><div style="font-size:12px; opacity:0.75;">Synchronicity <span id="syncPct">0</span>%</div></div><canvas id="oscCanvas" class="p1-osccanvas"></canvas></div>
             </div>
 
-            <div class="p1-panel p1-crt">
-              <div class="p1-title">FATIGUE</div>
-              <div class="p1-scopebox p1-curved">
-                <div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
-                  <div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">UV METER</div>
-                  <div class="p1-label" id="fatigueEta" style="opacity:0.75;">--</div>
-                </div>
-                <!-- Fatigue meter canvas: square via aspect-ratio. Use width/height 160 for intrinsic resolution. -->
-                <canvas id="fatigueMeter" width="160" height="160" style="width:100%; aspect-ratio:1 / 1; height:auto; display:block; margin-top:8px; border-radius:12px;"></canvas>
-                <div class="p1-label" style="margin-top:6px; opacity:0.70; font-size:11px;">
-                  Holding Ping builds fatigue and heat. Vent with taps.
-                </div>
-              </div>
-            </div>
+            <!-- Removed the large fatigue meter panel; the fatigue meter is now embedded above the ping button. -->
           </div>
 
           <div class="p1-panel p1-crt">
@@ -948,10 +937,9 @@ p1.flags ??= {};
     </div>
     `;
 
-      // Ensure fatigue UI exists once panels have been rendered
-      ensureFatigueMeterUI();
-      // Some browsers hydrate layout a tick later; try again next microtask
-      queueMicrotask(() => ensureFatigueMeterUI());
+      // The fatigue meter is now embedded above the ping button; no separate
+      // fatigue panel insertion is necessary. We therefore skip calling
+      // ensureFatigueMeterUI().
 
 
     // Bottom leaderboard buttons
@@ -1635,6 +1623,21 @@ const frame = (t) => {
         rate = rate / (1 + fatigue * 0.9);
         return Math.max(1, rate);
       };
+      // Schedules the next ping based on the current rate. Uses setTimeout
+      // instead of setInterval so that the interval can adapt to changing
+      // fatigue in real time.
+      const scheduleNext = () => {
+        if (!holdTimer) return;
+        const rate = computePingRate();
+        const nextInterval = Math.max(25, Math.floor(1000 / rate));
+        holdTimer = setTimeout(() => {
+          // If holding has been stopped mid-timeout, don't fire
+          if (!holdTimer) return;
+          doPing();
+          vis.holdPower = Math.min(1.0, (vis.holdPower || 0) + 0.08);
+          scheduleNext();
+        }, nextInterval);
+      };
       const startHold = () => {
         if (holdTimer) return;
         // mark holding state
@@ -1647,16 +1650,15 @@ const frame = (t) => {
         vis.holdPower = Math.max(vis.holdPower || 0, 0.25);
         // immediate ping for responsiveness
         doPing();
-        const rate = computePingRate();
-        const interval = Math.max(25, Math.floor(1000 / rate));
-        holdTimer = setInterval(() => {
-          doPing();
-          vis.holdPower = Math.min(1.0, (vis.holdPower || 0) + 0.08);
-        }, interval);
+        vis.holdPower = Math.min(1.0, (vis.holdPower || 0) + 0.08);
+        // begin adaptive loop
+        holdTimer = 1; // sentinel to indicate holding is active
+        scheduleNext();
       };
       const stopHold = () => {
         if (!holdTimer) return;
-        clearInterval(holdTimer);
+        // clear the timeout; holdTimer may hold timeout ID or sentinel
+        clearTimeout(holdTimer);
         holdTimer = null;
         // mark holding state off
         const st = api.getState();

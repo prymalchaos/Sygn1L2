@@ -818,13 +818,28 @@ p1.flags ??= {};
               </div>
             </div>
 
-            <!-- Mini fatigue meter placed above the ping/purge buttons. Its display width is one third of the panel and it maintains the original 16:11 ratio. -->
-            <canvas id="fatigueMeter" width="160" height="110" style="width:33%; aspect-ratio:16 / 11; height:auto; display:block; margin-top:4px; border-radius:10px;"></canvas>
+            <!-- Row of small gauges: mini oscilloscope and fatigue meter. Both share the same aspect ratio and flex sizing. -->
+            <div style="display:flex; gap:10px; margin-top:8px;">
+              <canvas id="oscCanvas" width="160" height="110" style="flex:1; aspect-ratio:16 / 11; height:auto; border-radius:10px;"></canvas>
+              <canvas id="fatigueMeter" width="160" height="110" style="flex:1; aspect-ratio:16 / 11; height:auto; border-radius:10px;"></canvas>
+            </div>
             <div style="display:flex; gap:10px; margin-top:8px; flex-wrap:wrap;">
               <button id="ping" class="p1-btn" style="flex:1; min-width:160px;">Ping</button>
               <button id="purge" class="p1-btn" style="flex:1; min-width:160px;">Purge</button>
             </div>
             <div id="hint" style="margin-top:8px; font-size:12px; opacity:0.85;"></div>
+          </div>
+
+          <!-- Main scope moved above the time trial panel -->
+          <div class="p1-panel p1-crt" style="margin-top:12px;">
+            <div class="p1-title">SCOPE</div>
+            <div class="p1-scopebox p1-curved">
+              <div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
+                <div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">SCOPE</div>
+                <div style="font-size:12px; opacity:0.75;">Flow</div>
+              </div>
+              <canvas id="scopeCanvas" class="p1-scopecanvas"></canvas>
+            </div>
           </div>
 
           <div class="p1-panel p1-crt" style="margin-top:12px;">
@@ -839,19 +854,7 @@ p1.flags ??= {};
             </div>
           </div>
 
-          <div class="p1-two">
-            <div class="p1-panel p1-crt">
-              <div class="p1-title">SCOPE</div>
-              <div class="p1-scopebox p1-curved"><div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;"><div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">SCOPE</div><div style="font-size:12px; opacity:0.75;">Flow</div></div><canvas id="scopeCanvas" class="p1-scopecanvas"></canvas></div>
-            </div>
-
-            <div class="p1-panel p1-crt">
-              <div class="p1-title">OSC</div>
-              <div class="p1-scopebox p1-curved"><div class="p1-row" style="justify-content:space-between; align-items:flex-end; gap:12px;"><div style="font-weight:900; letter-spacing:0.08em; font-size:12px; opacity:0.85;">OSCILLOSCOPE</div><div style="font-size:12px; opacity:0.75;">Synchronicity <span id="syncPct">0</span>%</div></div><canvas id="oscCanvas" class="p1-osccanvas"></canvas></div>
-            </div>
-
-            <!-- Removed the large fatigue meter panel; the fatigue meter is now embedded above the ping button. -->
-          </div>
+          <!-- Removed the p1-two grid of scope/osc/fatigue panels. The mini oscilloscope and fatigue meter are now shown above the ping button, and the large oscilloscope has been removed. -->
 
           <div class="p1-panel p1-crt">
             <div class="p1-title">UPGRADES</div>
@@ -1164,9 +1167,11 @@ p1.flags ??= {};
       const sps = p1.signalPerSecond || 0;
       const corr = p1.corruption || 0;
 
-      // Base amplitude responds to SPS; corruption adds instability.
-      const amp = Math.min(1, 0.20 + (sps / 30) * 0.55 + (corr / 100) * 0.35);
-      const noise = (corr / 100) * 0.65;
+      // Base amplitude responds to SPS; corruption adds instability. Double
+      // the effect of corruption on amplitude and noise to make the waveform
+      // more reactive.
+      const amp = Math.min(1, 0.20 + (sps / 30) * 0.55 + (corr / 100) * 0.70);
+      const noise = (corr / 100) * 1.30;
 
       // Ping “kick” makes a temporary spike/noise burst
       const sincePing = (Date.now() - vis.lastPingAt) / 1000;
@@ -1322,7 +1327,8 @@ function drawOsc(p1, dt) {
 
       // Phase offset transitions toward 90° at 100% (perfect circle)
       const corr = p1.corruption || 0;
-      const chaos = (corr / 100) * 0.8;
+      // Increase corruption influence on oscillation by doubling chaos
+      const chaos = (corr / 100) * 1.6;
 
       const sync01 = sync / 100;
       const targetPhi = Math.PI / 2; // 90°
@@ -1344,7 +1350,8 @@ function drawOsc(p1, dt) {
       ctx.lineWidth = 1.4;
 
       ctx.beginPath();
-      const pts = 900;
+      // Double the number of points to produce a more detailed waveform
+      const pts = 1800;
       for (let i=0; i<=pts; i++) {
         const t = (i/pts) * Math.PI * 2;
         const x = Math.sin(t * distort);
